@@ -139,14 +139,20 @@ contract AMM is ReentrancyGuard, Ownable {
         liquidity = _sqrt(amount0 * amount1);
         require(liquidity > MINIMUM_LIQUIDITY, "insufficient liquidity");
 
+        // Lock MINIMUM_LIQUIDITY forever by sending to address(0)
+        // This prevents the last LP from draining the pool completely
+        uint256 lockedLiquidity = MINIMUM_LIQUIDITY;
+        uint256 userLiquidity = liquidity - lockedLiquidity;
+
         pool.token0 = token0;
         pool.token1 = token1;
         pool.reserve0 = uint112(amount0);
         pool.reserve1 = uint112(amount1);
         pool.feeBps = feeBps;
-        pool.totalSupply = liquidity;
+        pool.totalSupply = liquidity; // totalSupply includes locked liquidity
         pool.exists = true;
-        pool.balanceOf[msg.sender] = liquidity;
+        pool.balanceOf[address(0)] = lockedLiquidity; // Lock to zero address
+        pool.balanceOf[msg.sender] = userLiquidity;
 
         emit PoolCreated(
             poolId,
