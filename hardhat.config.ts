@@ -1,29 +1,12 @@
 
-import * as dotenv from "dotenv";
-dotenv.config();
-import { HardhatUserConfig } from "hardhat/config";
-import "@nomicfoundation/hardhat-ethers";
-import "@nomicfoundation/hardhat-chai-matchers";
-import "@typechain/hardhat";
-import "hardhat-gas-reporter";
-import "solidity-coverage";
-import "@nomicfoundation/hardhat-verify";
+import { configVariable, defineConfig } from "hardhat/config";
+import "@nomicfoundation/hardhat-toolbox-viem";
 
-// If not set, it uses ours Alchemy's default API key.
-// You can get your own at https://dashboard.alchemyapi.io
-const providerApiKey = process.env.ALCHEMY_API_KEY || "oKxs-03sij-U_N0iOlrSsZFr29-IqbuF";
-// If not set, it uses the hardhat account 0 private key.
-// You can generate a random account with `yarn generate` or `yarn account:import` to import your existing PK
-const deployerPrivateKey =
-  process.env.ACCOUNT_PRIVATE_KEY ?? "0x0000000000000000000000000000000000000000000000000000000000000000";
-// If not set, it uses our block explorers default API keys.
-const etherscanApiKey = process.env.ETHERSCAN_V2_API_KEY || "DNXJA8RX2Q3VZ4URQIWP7Z68CJXQZSC6AW";
-
-const config: HardhatUserConfig = {
+export default defineConfig({
   solidity: {
     compilers: [
       {
-        version: "0.8.20",
+        version: "0.8.28",
         settings: {
           optimizer: {
             enabled: true,
@@ -39,122 +22,133 @@ const config: HardhatUserConfig = {
   networks: {
     // View the networks that are pre-configured.
     // If the network you are looking for is not here you can add new network settings
-    hardhat: {
-      accounts: {
-        count: 20,
-        // Default balance is 10000 ETH per account, no need to specify
-      },
-      forking: {
-        url: `https://eth-mainnet.alchemyapi.io/v2/${providerApiKey}`,
-        enabled: process.env.MAINNET_FORKING_ENABLED === "true",
-      },
-    },
     mainnet: {
-      url: "https://mainnet.rpc.buidlguidl.com",
-      accounts: [deployerPrivateKey],
+      type: "http",
+      url: configVariable("MAINNET_RPC_URL"),
+      accounts: [configVariable("MAINNET_PRIVATE_KEY")],
     },
     sepolia: {
-      url: `https://eth-sepolia.g.alchemy.com/v2/${providerApiKey}`,
-      accounts: [deployerPrivateKey],
+      type: "http",
+      url: configVariable(
+        "ALCHEMY_API_KEY",
+        "https://eth-sepolia.g.alchemy.com/v2/{variable}",
+      ),
+      accounts: [configVariable("SEPOLIA_PRIVATE_KEY")],
     },
     arbitrum: {
-      url: `https://arb-mainnet.g.alchemy.com/v2/${providerApiKey}`,
-      accounts: [deployerPrivateKey],
+      type: "http",
+      url: configVariable(
+        "ALCHEMY_API_KEY",
+        "https://arb-mainnet.g.alchemy.com/v2/{variable}",
+      ),
+      accounts: [configVariable("ARBITRUM_PRIVATE_KEY")],
     },
     arbitrumSepolia: {
-      url: `https://arb-sepolia.g.alchemy.com/v2/${providerApiKey}`,
-      accounts: [deployerPrivateKey],
+      type: "http",
+      url: configVariable(
+        "ALCHEMY_API_KEY",
+        "https://arb-sepolia.g.alchemy.com/v2/{variable}",
+      ),
+      accounts: [configVariable("ARBITRUM_SEPOLIA_PRIVATE_KEY")],
     },
     optimism: {
-      url: `https://opt-mainnet.g.alchemy.com/v2/${providerApiKey}`,
-      accounts: [deployerPrivateKey],
+      type: "http",
+      url: configVariable(
+        "ALCHEMY_API_KEY",
+        "https://opt-mainnet.g.alchemy.com/v2/{variable}",
+      ),
+      accounts: [configVariable("OPTIMISM_PRIVATE_KEY")],
     },
     optimismSepolia: {
-      url: `https://opt-sepolia.g.alchemy.com/v2/${providerApiKey}`,
-      accounts: [deployerPrivateKey],
+      type: "http",
+      url: configVariable(
+        "ALCHEMY_API_KEY",
+        "https://opt-sepolia.g.alchemy.com/v2/{variable}",
+      ),
+      accounts: [configVariable("OPTIMISM_SEPOLIA_PRIVATE_KEY")],
     },
     polygon: {
-      url: `https://polygon-mainnet.g.alchemy.com/v2/${providerApiKey}`,
-      accounts: [deployerPrivateKey],
+      type: "http",
+      url: configVariable(
+        "ALCHEMY_API_KEY",
+        "https://polygon-mainnet.g.alchemy.com/v2/{variable}",
+      ),
+      accounts: [configVariable("POLYGON_PRIVATE_KEY")],
     },
     polygonAmoy: {
-      url: `https://polygon-amoy.g.alchemy.com/v2/${providerApiKey}`,
-      accounts: [deployerPrivateKey],
+      type: "http",
+      url: configVariable(
+        "ALCHEMY_API_KEY",
+        "https://polygon-amoy.g.alchemy.com/v2/{variable}",
+      ),
+      accounts: [configVariable("POLYGON_AMOY_PRIVATE_KEY")],
     },
     polygonZkEvm: {
-      url: `https://polygonzkevm-mainnet.g.alchemy.com/v2/${providerApiKey}`,
-      accounts: [deployerPrivateKey],
+      type: "http",
+      url: configVariable(
+        "ALCHEMY_API_KEY",
+        "https://polygonzkevm-mainnet.g.alchemy.com/v2/{variable}",
+      ),
+      accounts: [configVariable("POLYGON_ZKEVM_PRIVATE_KEY")],
     },
     polygonZkEvmCardona: {
-      url: `https://polygonzkevm-cardona.g.alchemy.com/v2/${providerApiKey}`,
-      accounts: [deployerPrivateKey],
+      type: "http",
+      url: configVariable(
+        "ALCHEMY_API_KEY",
+        "https://polygonzkevm-cardona.g.alchemy.com/v2/{variable}",
+      ),
+      accounts: [configVariable("POLYGON_ZKEVM_CARDONA_PRIVATE_KEY")],
     },
     gnosis: {
+      type: "http",
       url: "https://rpc.gnosischain.com",
-      accounts: [deployerPrivateKey],
+      accounts: [configVariable("GNOSIS_PRIVATE_KEY")],
     },
     chiado: {
+      type: "http",
       url: "https://rpc.chiadochain.net",
-      accounts: [deployerPrivateKey],
-    },
-    base: {
-      url: "https://mainnet.base.org",
-      accounts: [deployerPrivateKey],
-    },
-    baseSepolia: {
-      url: "https://sepolia.base.org",
-      accounts: [deployerPrivateKey],
-    },
-    scrollSepolia: {
-      url: "https://sepolia-rpc.scroll.io",
-      accounts: [deployerPrivateKey],
-    },
-    scroll: {
-      url: "https://rpc.scroll.io",
-      accounts: [deployerPrivateKey],
-    },
-    celo: {
-      url: "https://forno.celo.org",
-      accounts: [deployerPrivateKey],
-    },
-    celoAlfajores: {
-      url: "https://alfajores-forno.celo-testnet.org",
-      accounts: [deployerPrivateKey],
+      accounts: [configVariable("CHIADO_PRIVATE_KEY")],
     },
     base: {
       type: "http",
-      chainType: "l1",
       url: configVariable("BASE_RPC_URL"),
       accounts: [configVariable("BASE_PRIVATE_KEY")],
     },
     baseSepolia: {
       type: "http",
-      chainType: "l1",
       url: configVariable("BASE_SEPOLIA_RPC_URL"),
       accounts: [configVariable("BASE_SEPOLIA_PRIVATE_KEY")],
     },
+    scrollSepolia: {
+      type: "http",
+      url: configVariable("SCROLL_SEPOLIA_RPC_URL"),
+      accounts: [configVariable("SCROLL_SEPOLIA_PRIVATE_KEY")],
+    },
+    scroll: {
+      type: "http",
+      url: configVariable("SCROLL_RPC_URL"),
+      accounts: [configVariable("SCROLL_PRIVATE_KEY")],
+    },
     celo: {
       type: "http",
-      chainType: "l1",
       url: configVariable("CELO_RPC_URL"),
       accounts: [configVariable("CELO_PRIVATE_KEY")],
     },
     celoAlfajores: {
       type: "http",
-      chainType: "l1",
       url: configVariable("CELO_ALFAJORES_RPC_URL"),
       accounts: [configVariable("CELO_ALFAJORES_PRIVATE_KEY")],
     },
   },
-  // Configuration for harhdat-verify plugin
+  // Configuration for hardhat-verify plugin
   etherscan: {
     apiKey: {
-      mainnet: etherscanApiKey,
-      sepolia: etherscanApiKey,
-      base: etherscanApiKey,
-      baseSepolia: etherscanApiKey,
-      celo: process.env.CELOSCAN_API_KEY || etherscanApiKey, // Celo uses Celoscan
-      celoAlfajores: process.env.CELOSCAN_API_KEY || etherscanApiKey,
+      mainnet: configVariable("ETHERSCAN_API_KEY"),
+      sepolia: configVariable("ETHERSCAN_API_KEY"),
+      base: configVariable("BASESCAN_API_KEY"),
+      baseSepolia: configVariable("BASESCAN_API_KEY"),
+      celo: configVariable("CELOSCAN_API_KEY"), // Celo uses Celoscan
+      celoAlfajores: configVariable("CELOSCAN_API_KEY"),
     },
     customChains: [
       {
@@ -178,6 +172,4 @@ const config: HardhatUserConfig = {
   sourcify: {
     enabled: false,
   },
-};
-
-export default config;
+});
