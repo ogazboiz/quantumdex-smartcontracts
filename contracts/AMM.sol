@@ -168,9 +168,12 @@ contract AMM is ReentrancyGuard, Ownable {
         pool.reserve0 = uint112(amount0);
         pool.reserve1 = uint112(amount1);
         pool.feeBps = feeBps;
-        pool.totalSupply = liquidity; // totalSupply includes locked liquidity
+        // totalSupply includes locked liquidity to maintain accurate accounting
+        pool.totalSupply = liquidity;
         pool.exists = true;
-        pool.balanceOf[address(0)] = lockedLiquidity; // Lock to zero address
+        // Lock MINIMUM_LIQUIDITY to address(0) - this can never be removed
+        pool.balanceOf[address(0)] = lockedLiquidity;
+        // User receives liquidity minus the locked portion
         pool.balanceOf[msg.sender] = userLiquidity;
 
         emit PoolCreated(
