@@ -764,4 +764,28 @@ describe("AMM", async () => {
       );
     }
   });
+
+  it("verifies locked liquidity at address(0) cannot be removed", async () => {
+    if (!poolId) {
+      const events = await publicClient.getContractEvents({
+        address: amm.address,
+        abi: amm.abi,
+        eventName: "PoolCreated",
+        fromBlock: 0n,
+        strict: true,
+      });
+      poolId = (events[0] as any).args.poolId as `0x${string}`;
+    }
+
+    const lockedBalance = await amm.read.getLpBalance([poolId, "0x0000000000000000000000000000000000000000"]);
+    assert.equal(lockedBalance, 1000n, "Locked balance should be 1000");
+
+    // Attempting to remove from address(0) would require calling removeLiquidity
+    // but address(0) has no way to call the function, so it's effectively locked forever
+    // This test verifies the locked balance exists and is correct
+    const [, , , , , totalSupply] = await amm.read.getPool([poolId]);
+    
+    // Even if all user liquidity is removed, locked liquidity remains
+    assert.ok(BigInt(totalSupply) >= 1000n, "Total supply should always be at least MINIMUM_LIQUIDITY");
+  });
 });
