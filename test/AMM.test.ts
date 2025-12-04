@@ -470,4 +470,42 @@ describe("AMM", async () => {
       "Should revert when liquidity equals MINIMUM_LIQUIDITY"
     );
   });
+
+  it("prevents multiple removals from draining pool below minimum", async () => {
+    if (!poolId) {
+      const events = await publicClient.getContractEvents({
+        address: amm.address,
+        abi: amm.abi,
+        eventName: "PoolCreated",
+        fromBlock: 0n,
+        strict: true,
+      });
+      poolId = (events[0] as any).args.poolId as `0x${string}`;
+    }
+
+    const [, , , , , totalSupply] = await amm.read.getPool([poolId]);
+    const lpBalance = await amm.read.getLpBalance([poolId, deployer.account.address]);
+
+    // Try to remove liquidity in multiple steps
+    const firstRemoval = lpBalance / 2n;
+    if (firstRemoval > 0n) {
+      const remove1 = await amm.write.removeLiquidity([poolId, firstRemoval], {
+        account: deployer.account
+      });
+      await publicClient.getTransactionReceipt({ hash: remove1 });
+
+      const remainingBalance = await amm.read.getLpBalance([poolId, deployer.account.address]);
+      
+      // Try to remove all remaining (should fail)
+      await assert.rejects(
+        async () => {
+          await amm.write.removeLiquidity([poolId, remainingBalance], {
+            account: deployer.account
+          });
+        },
+        /insufficient liquidity/,
+        "Should prevent removing all remaining liquidity"
+      );
+    }
+  });
 });
