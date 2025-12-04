@@ -735,4 +735,33 @@ describe("AMM", async () => {
 
     assert.ok(expectedUser === expectedTotal - 1000n, "User liquidity should equal total minus MINIMUM_LIQUIDITY");
   });
+
+  it("provides clear error message when liquidity is insufficient", async () => {
+    const tinyA = 10n;
+    const tinyB = 10n;
+
+    const tokenO = await viem.deployContract("MockToken", ["TokenO", "TKO", 18], {
+      account: deployer.account,
+    });
+    const tokenP = await viem.deployContract("MockToken", ["TokenP", "TKP", 18], {
+      account: deployer.account,
+    });
+
+    await tokenO.write.approve([amm.address, tinyA], { account: deployer.account });
+    await tokenP.write.approve([amm.address, tinyB], { account: deployer.account });
+
+    try {
+      await amm.write.createPool(
+        [tokenO.address, tokenP.address, tinyA, tinyB],
+        { account: deployer.account }
+      );
+      assert.fail("Should have reverted");
+    } catch (error: any) {
+      assert.ok(
+        error.message.includes("insufficient liquidity") || 
+        error.message.includes("revert"),
+        "Error message should indicate insufficient liquidity"
+      );
+    }
+  });
 });
