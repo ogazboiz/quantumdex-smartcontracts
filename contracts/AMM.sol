@@ -77,6 +77,15 @@ contract AMM is ReentrancyGuard, Ownable {
         address recipient
     );
 
+    event MultiHopSwap(
+        address indexed sender,
+        address indexed tokenIn,
+        address indexed tokenOut,
+        uint256 amountIn,
+        uint256 amountOut,
+        address recipient
+    );
+
     constructor(uint16 _defaultFeeBps) Ownable(msg.sender) {
         require(_defaultFeeBps <= 1000, "fee too high");
         defaultFeeBps = _defaultFeeBps;
@@ -358,6 +367,23 @@ contract AMM is ReentrancyGuard, Ownable {
         }
 
         emit Swap(poolId, msg.sender, tokenIn, amountIn, amountOut, recipient);
+    }
+
+    /// @notice Execute a multi-hop swap through multiple pools
+    /// @dev Path format: [tokenIn, poolId1, tokenMid, poolId2, tokenOut, ...]
+    /// @param path Array alternating between tokens and poolIds
+    /// @param amountIn Amount of input token
+    /// @param minAmountOut Minimum amount of output token (slippage protection)
+    /// @param recipient Address to receive output tokens
+    /// @return amountOut Amount of output token received
+    function swapMultiHop(
+        address[] calldata path,
+        uint256 amountIn,
+        uint256 minAmountOut,
+        address recipient
+    ) external payable nonReentrant returns (uint256 amountOut) {
+        // TODO: Implement multi-hop swap logic
+        revert("Not implemented");
     }
 
     function _getAmountOut(
