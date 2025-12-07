@@ -149,14 +149,27 @@ describe("AMM Tests", function () {
       );
       await tx1.wait();
 
-      // Add more liquidity
-      const tx2 = await amm.addLiquidity(poolId, amountA, amountB);
+      // Get initial pool state
+      const poolBefore = await amm.getPool(poolId);
+      const initialReserve0 = poolBefore.reserve0;
+      const initialReserve1 = poolBefore.reserve1;
+
+      // Determine token order (token0 < token1)
+      const tokenAAddr = await tokenA.getAddress();
+      const tokenBAddr = await tokenB.getAddress();
+      const isTokenAFirst = tokenAAddr.toLowerCase() < tokenBAddr.toLowerCase();
+      
+      // Add liquidity - amounts must be in token0/token1 order
+      const amount0Desired = isTokenAFirst ? amountA : amountB;
+      const amount1Desired = isTokenAFirst ? amountB : amountA;
+      
+      const tx2 = await amm.addLiquidity(poolId, amount0Desired, amount1Desired);
       await tx2.wait();
 
       // Verify reserves increased
-      const pool = await amm.getPool(poolId);
-      expect(pool.reserve0).to.equal(amountA * 2n);
-      expect(pool.reserve1).to.equal(amountB * 2n);
+      const poolAfter = await amm.getPool(poolId);
+      expect(poolAfter.reserve0).to.equal(initialReserve0 + amount0Desired);
+      expect(poolAfter.reserve1).to.equal(initialReserve1 + amount1Desired);
     });
 
     it("Should remove liquidity from pool", async function () {
@@ -372,15 +385,21 @@ describe("AMM Tests", function () {
       );
       await tx1.wait();
 
-      // Calculate expected output without fee
+      // Get pool state and determine token order
       const pool = await amm.getPool(poolId);
-      const reserveIn = pool.reserve0;
-      const reserveOut = pool.reserve1;
+      const tokenAAddr = await tokenA.getAddress();
+      const isTokenAFirst = tokenAAddr.toLowerCase() < (await tokenB.getAddress()).toLowerCase();
+      
+      // Determine which reserves correspond to input/output
+      const reserveIn = isTokenAFirst ? pool.reserve0 : pool.reserve1;
+      const reserveOut = isTokenAFirst ? pool.reserve1 : pool.reserve0;
 
-      // Without fee: amountOut = (amountIn * reserveOut) / (reserveIn + amountIn)
+      // Calculate expected output with fee: amountOut = (amountInWithFee * reserveOut) / (reserveIn + amountInWithFee)
       const amountInWithFee = (swapAmount * BigInt(10000 - FEE_BPS)) / 10000n;
-      const expectedOutputNoFee = (swapAmount * reserveOut) / (reserveIn + swapAmount);
       const expectedOutputWithFee = (amountInWithFee * reserveOut) / (reserveIn + amountInWithFee);
+
+      // Calculate expected output without fee for comparison
+      const expectedOutputNoFee = (swapAmount * reserveOut) / (reserveIn + swapAmount);
 
       // Execute swap
       const initialBalanceB = await tokenB.balanceOf(deployer.address);
