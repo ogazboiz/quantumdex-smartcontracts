@@ -33,75 +33,75 @@ const config: HardhatUserConfig = {
     },
     mainnet: {
       url: "https://mainnet.rpc.buidlguidl.com",
-      accounts: [deployerPrivateKey],
+      accounts: deployerPrivateKey !== "0x0000000000000000000000000000000000000000000000000000000000000000" ? [deployerPrivateKey] : [],
     },
     sepolia: {
       url: `https://eth-sepolia.g.alchemy.com/v2/${providerApiKey}`,
-      accounts: [deployerPrivateKey],
+      accounts: deployerPrivateKey !== "0x0000000000000000000000000000000000000000000000000000000000000000" ? [deployerPrivateKey] : [],
     },
     arbitrum: {
       url: `https://arb-mainnet.g.alchemy.com/v2/${providerApiKey}`,
-      accounts: [deployerPrivateKey],
+      accounts: deployerPrivateKey !== "0x0000000000000000000000000000000000000000000000000000000000000000" ? [deployerPrivateKey] : [],
     },
     arbitrumSepolia: {
       url: `https://arb-sepolia.g.alchemy.com/v2/${providerApiKey}`,
-      accounts: [deployerPrivateKey],
+      accounts: deployerPrivateKey !== "0x0000000000000000000000000000000000000000000000000000000000000000" ? [deployerPrivateKey] : [],
     },
     optimism: {
       url: `https://opt-mainnet.g.alchemy.com/v2/${providerApiKey}`,
-      accounts: [deployerPrivateKey],
+      accounts: deployerPrivateKey !== "0x0000000000000000000000000000000000000000000000000000000000000000" ? [deployerPrivateKey] : [],
     },
     optimismSepolia: {
       url: `https://opt-sepolia.g.alchemy.com/v2/${providerApiKey}`,
-      accounts: [deployerPrivateKey],
+      accounts: deployerPrivateKey !== "0x0000000000000000000000000000000000000000000000000000000000000000" ? [deployerPrivateKey] : [],
     },
     polygon: {
       url: `https://polygon-mainnet.g.alchemy.com/v2/${providerApiKey}`,
-      accounts: [deployerPrivateKey],
+      accounts: deployerPrivateKey !== "0x0000000000000000000000000000000000000000000000000000000000000000" ? [deployerPrivateKey] : [],
     },
     polygonAmoy: {
       url: `https://polygon-amoy.g.alchemy.com/v2/${providerApiKey}`,
-      accounts: [deployerPrivateKey],
+      accounts: deployerPrivateKey !== "0x0000000000000000000000000000000000000000000000000000000000000000" ? [deployerPrivateKey] : [],
     },
     polygonZkEvm: {
       url: `https://polygonzkevm-mainnet.g.alchemy.com/v2/${providerApiKey}`,
-      accounts: [deployerPrivateKey],
+      accounts: deployerPrivateKey !== "0x0000000000000000000000000000000000000000000000000000000000000000" ? [deployerPrivateKey] : [],
     },
     polygonZkEvmCardona: {
       url: `https://polygonzkevm-cardona.g.alchemy.com/v2/${providerApiKey}`,
-      accounts: [deployerPrivateKey],
+      accounts: deployerPrivateKey !== "0x0000000000000000000000000000000000000000000000000000000000000000" ? [deployerPrivateKey] : [],
     },
     gnosis: {
       url: "https://rpc.gnosischain.com",
-      accounts: [deployerPrivateKey],
+      accounts: deployerPrivateKey !== "0x0000000000000000000000000000000000000000000000000000000000000000" ? [deployerPrivateKey] : [],
     },
     chiado: {
       url: "https://rpc.chiadochain.net",
-      accounts: [deployerPrivateKey],
+      accounts: deployerPrivateKey !== "0x0000000000000000000000000000000000000000000000000000000000000000" ? [deployerPrivateKey] : [],
     },
     base: {
       url: "https://mainnet.base.org",
-      accounts: [deployerPrivateKey],
+      accounts: deployerPrivateKey !== "0x0000000000000000000000000000000000000000000000000000000000000000" ? [deployerPrivateKey] : [],
     },
     baseSepolia: {
       url: "https://sepolia.base.org",
-      accounts: [deployerPrivateKey],
+      accounts: deployerPrivateKey !== "0x0000000000000000000000000000000000000000000000000000000000000000" ? [deployerPrivateKey] : [],
     },
     scrollSepolia: {
       url: "https://sepolia-rpc.scroll.io",
-      accounts: [deployerPrivateKey],
+      accounts: deployerPrivateKey !== "0x0000000000000000000000000000000000000000000000000000000000000000" ? [deployerPrivateKey] : [],
     },
     scroll: {
       url: "https://rpc.scroll.io",
-      accounts: [deployerPrivateKey],
+      accounts: deployerPrivateKey !== "0x0000000000000000000000000000000000000000000000000000000000000000" ? [deployerPrivateKey] : [],
     },
     celo: {
       url: "https://forno.celo.org",
-      accounts: [deployerPrivateKey],
+      accounts: deployerPrivateKey !== "0x0000000000000000000000000000000000000000000000000000000000000000" ? [deployerPrivateKey] : [],
     },
     celoAlfajores: {
       url: "https://alfajores-forno.celo-testnet.org",
-      accounts: [deployerPrivateKey],
+      accounts: deployerPrivateKey !== "0x0000000000000000000000000000000000000000000000000000000000000000" ? [deployerPrivateKey] : [],
     },
   },
   // Configuration for hardhat-verify plugin
