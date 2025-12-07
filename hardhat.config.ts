@@ -1,6 +1,13 @@
-
 import { HardhatUserConfig } from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox";
+import "@nomicfoundation/hardhat-chai-matchers";
+
+// If not set, it uses ours Alchemy's default API key.
+const providerApiKey = process.env.ALCHEMY_API_KEY || "oKxs-03sij-U_N0iOlrSsZFr29-IqbuF";
+// If not set, it uses the hardhat account 0 private key.
+const deployerPrivateKey = process.env.ACCOUNT_PRIVATE_KEY ?? "0x0000000000000000000000000000000000000000000000000000000000000000";
+// If not set, it uses our block explorers default API keys.
+const etherscanApiKey = process.env.ETHERSCAN_V2_API_KEY || "DNXJA8RX2Q3VZ4URQIWP7Z68CJXQZSC6AW";
 
 const config: HardhatUserConfig = {
   solidity: {
@@ -10,7 +17,6 @@ const config: HardhatUserConfig = {
         settings: {
           optimizer: {
             enabled: true,
-            // https://docs.soliditylang.org/en/latest/using-the-compiler.html#optimizer-options
             runs: 200,
           },
         },
@@ -19,140 +25,88 @@ const config: HardhatUserConfig = {
   },
   // Primary deployment target: Base Sepolia (testnet) and Base (mainnet)
   defaultNetwork: "baseSepolia", // Use "base" for mainnet deployment
-  paths: {
-    tests: "./test",
-  },
   networks: {
-    // View the networks that are pre-configured.
-    // If the network you are looking for is not here you can add new network settings
+    hardhat: {
+      accounts: {
+        count: 20,
+      },
+    },
     mainnet: {
-      type: "http",
-      url: configVariable("MAINNET_RPC_URL"),
-      accounts: [configVariable("MAINNET_PRIVATE_KEY")],
+      url: "https://mainnet.rpc.buidlguidl.com",
+      accounts: [deployerPrivateKey],
     },
     sepolia: {
-      type: "http",
-      url: configVariable(
-        "ALCHEMY_API_KEY",
-        "https://eth-sepolia.g.alchemy.com/v2/{variable}",
-      ),
-      accounts: [configVariable("SEPOLIA_PRIVATE_KEY")],
+      url: `https://eth-sepolia.g.alchemy.com/v2/${providerApiKey}`,
+      accounts: [deployerPrivateKey],
     },
     arbitrum: {
-      type: "http",
-      url: configVariable(
-        "ALCHEMY_API_KEY",
-        "https://arb-mainnet.g.alchemy.com/v2/{variable}",
-      ),
-      accounts: [configVariable("ARBITRUM_PRIVATE_KEY")],
+      url: `https://arb-mainnet.g.alchemy.com/v2/${providerApiKey}`,
+      accounts: [deployerPrivateKey],
     },
     arbitrumSepolia: {
-      type: "http",
-      url: configVariable(
-        "ALCHEMY_API_KEY",
-        "https://arb-sepolia.g.alchemy.com/v2/{variable}",
-      ),
-      accounts: [configVariable("ARBITRUM_SEPOLIA_PRIVATE_KEY")],
+      url: `https://arb-sepolia.g.alchemy.com/v2/${providerApiKey}`,
+      accounts: [deployerPrivateKey],
     },
     optimism: {
-      type: "http",
-      url: configVariable(
-        "ALCHEMY_API_KEY",
-        "https://opt-mainnet.g.alchemy.com/v2/{variable}",
-      ),
-      accounts: [configVariable("OPTIMISM_PRIVATE_KEY")],
+      url: `https://opt-mainnet.g.alchemy.com/v2/${providerApiKey}`,
+      accounts: [deployerPrivateKey],
     },
     optimismSepolia: {
-      type: "http",
-      url: configVariable(
-        "ALCHEMY_API_KEY",
-        "https://opt-sepolia.g.alchemy.com/v2/{variable}",
-      ),
-      accounts: [configVariable("OPTIMISM_SEPOLIA_PRIVATE_KEY")],
+      url: `https://opt-sepolia.g.alchemy.com/v2/${providerApiKey}`,
+      accounts: [deployerPrivateKey],
     },
     polygon: {
-      type: "http",
-      url: configVariable(
-        "ALCHEMY_API_KEY",
-        "https://polygon-mainnet.g.alchemy.com/v2/{variable}",
-      ),
-      accounts: [configVariable("POLYGON_PRIVATE_KEY")],
+      url: `https://polygon-mainnet.g.alchemy.com/v2/${providerApiKey}`,
+      accounts: [deployerPrivateKey],
     },
     polygonAmoy: {
-      type: "http",
-      url: configVariable(
-        "ALCHEMY_API_KEY",
-        "https://polygon-amoy.g.alchemy.com/v2/{variable}",
-      ),
-      accounts: [configVariable("POLYGON_AMOY_PRIVATE_KEY")],
+      url: `https://polygon-amoy.g.alchemy.com/v2/${providerApiKey}`,
+      accounts: [deployerPrivateKey],
     },
     polygonZkEvm: {
-      type: "http",
-      url: configVariable(
-        "ALCHEMY_API_KEY",
-        "https://polygonzkevm-mainnet.g.alchemy.com/v2/{variable}",
-      ),
-      accounts: [configVariable("POLYGON_ZKEVM_PRIVATE_KEY")],
+      url: `https://polygonzkevm-mainnet.g.alchemy.com/v2/${providerApiKey}`,
+      accounts: [deployerPrivateKey],
     },
     polygonZkEvmCardona: {
-      type: "http",
-      url: configVariable(
-        "ALCHEMY_API_KEY",
-        "https://polygonzkevm-cardona.g.alchemy.com/v2/{variable}",
-      ),
-      accounts: [configVariable("POLYGON_ZKEVM_CARDONA_PRIVATE_KEY")],
+      url: `https://polygonzkevm-cardona.g.alchemy.com/v2/${providerApiKey}`,
+      accounts: [deployerPrivateKey],
     },
     gnosis: {
-      type: "http",
       url: "https://rpc.gnosischain.com",
-      accounts: [configVariable("GNOSIS_PRIVATE_KEY")],
+      accounts: [deployerPrivateKey],
     },
     chiado: {
-      type: "http",
       url: "https://rpc.chiadochain.net",
-      accounts: [configVariable("CHIADO_PRIVATE_KEY")],
+      accounts: [deployerPrivateKey],
     },
     base: {
-      type: "http",
-      url: configVariable("BASE_RPC_URL"),
-      accounts: [configVariable("BASE_PRIVATE_KEY")],
+      url: "https://mainnet.base.org",
+      accounts: [deployerPrivateKey],
     },
     baseSepolia: {
-      type: "http",
-      url: configVariable("BASE_SEPOLIA_RPC_URL"),
-      accounts: [configVariable("BASE_SEPOLIA_PRIVATE_KEY")],
+      url: "https://sepolia.base.org",
+      accounts: [deployerPrivateKey],
     },
     scrollSepolia: {
-      type: "http",
-      url: configVariable("SCROLL_SEPOLIA_RPC_URL"),
-      accounts: [configVariable("SCROLL_SEPOLIA_PRIVATE_KEY")],
+      url: "https://sepolia-rpc.scroll.io",
+      accounts: [deployerPrivateKey],
     },
     scroll: {
-      type: "http",
-      url: configVariable("SCROLL_RPC_URL"),
-      accounts: [configVariable("SCROLL_PRIVATE_KEY")],
+      url: "https://rpc.scroll.io",
+      accounts: [deployerPrivateKey],
     },
     celo: {
-      type: "http",
-      url: configVariable("CELO_RPC_URL"),
-      accounts: [configVariable("CELO_PRIVATE_KEY")],
+      url: "https://forno.celo.org",
+      accounts: [deployerPrivateKey],
     },
     celoAlfajores: {
-      type: "http",
-      url: configVariable("CELO_ALFAJORES_RPC_URL"),
-      accounts: [configVariable("CELO_ALFAJORES_PRIVATE_KEY")],
+      url: "https://alfajores-forno.celo-testnet.org",
+      accounts: [deployerPrivateKey],
     },
   },
   // Configuration for hardhat-verify plugin
   etherscan: {
-    apiKey: {
-      mainnet: configVariable("ETHERSCAN_API_KEY"),
-      sepolia: configVariable("ETHERSCAN_API_KEY"),
-      base: configVariable("BASESCAN_API_KEY"),
-      baseSepolia: configVariable("BASESCAN_API_KEY"),
-      celo: configVariable("CELOSCAN_API_KEY"), // Celo uses Celoscan
-      celoAlfajores: configVariable("CELOSCAN_API_KEY"),
-    },
+    apiKey: etherscanApiKey,
     customChains: [
       {
         network: "celo",
