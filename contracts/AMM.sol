@@ -377,13 +377,14 @@ contract AMM is ReentrancyGuard, Ownable {
 
     /// @notice Execute a multi-hop swap through multiple pools
     /// @dev Path format: [tokenIn, poolId1, tokenMid, poolId2, tokenOut, ...]
-    /// @param path Array alternating between tokens and poolIds
+    /// @dev Path uses bytes32[] where even indices are tokens (as bytes32) and odd indices are poolIds
+    /// @param path Array alternating between tokens (as bytes32) and poolIds
     /// @param amountIn Amount of input token
     /// @param minAmountOut Minimum amount of output token (slippage protection)
     /// @param recipient Address to receive output tokens
     /// @return amountOut Amount of output token received
     function swapMultiHop(
-        address[] calldata path,
+        bytes32[] calldata path,
         uint256 amountIn,
         uint256 minAmountOut,
         address recipient
@@ -410,7 +411,7 @@ contract AMM is ReentrancyGuard, Ownable {
         uint256 currentAmount = amountIn;
         
         // Handle initial token transfer (only for first hop)
-        address firstToken = path[0];
+        address firstToken = address(uint160(uint256(path[0])));
         if (firstToken == ETH) {
             require(msg.value == amountIn, "ETH amount mismatch");
         } else {
@@ -424,9 +425,9 @@ contract AMM is ReentrancyGuard, Ownable {
             uint256 poolIdIndex = tokenInIndex + 1;
             uint256 tokenOutIndex = tokenInIndex + 2;
             
-            address tokenIn = path[tokenInIndex];
-            bytes32 poolId = bytes32(uint256(uint160(path[poolIdIndex])));
-            address tokenOut = path[tokenOutIndex];
+            address tokenIn = address(uint160(uint256(path[tokenInIndex])));
+            bytes32 poolId = path[poolIdIndex];
+            address tokenOut = address(uint160(uint256(path[tokenOutIndex])));
             
             // Execute single hop swap
             // For intermediate hops, recipient is this contract (tokens stay in contract)
@@ -438,14 +439,16 @@ contract AMM is ReentrancyGuard, Ownable {
         require(amountOut >= minAmountOut, "slippage");
         
         // Emit MultiHopSwap event
-        emit MultiHopSwap(msg.sender, path[0], path[path.length - 1], amountIn, amountOut, recipient);
+        address finalTokenIn = address(uint160(uint256(path[0])));
+        address finalTokenOut = address(uint160(uint256(path[path.length - 1])));
+        emit MultiHopSwap(msg.sender, finalTokenIn, finalTokenOut, amountIn, amountOut, recipient);
     }
 
     /// @notice Validate multi-hop swap path format
-    /// @dev Path must alternate: token, poolId, token, poolId, ...
+    /// @dev Path must alternate: token (as bytes32), poolId, token (as bytes32), poolId, ...
     /// @param path Array to validate
     /// @return isValid True if path format is valid
-    function _validatePath(address[] calldata path) internal pure returns (bool isValid) {
+    function _validatePath(bytes32[] calldata path) internal pure returns (bool isValid) {
         // Path must have at least 3 elements and be odd length
         if (path.length < 3 || path.length % 2 == 0) {
             return false;
