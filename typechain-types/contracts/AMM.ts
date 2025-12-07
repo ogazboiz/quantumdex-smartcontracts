@@ -311,7 +311,7 @@ export interface AMM extends BaseContract {
         amount1: bigint;
       }
     ],
-    "nonpayable"
+    "payable"
   >;
 
   createPool: TypedContractMethod<
@@ -323,7 +323,7 @@ export interface AMM extends BaseContract {
       feeBps: BigNumberish
     ],
     [[string, bigint] & { poolId: string; liquidity: bigint }],
-    "nonpayable"
+    "payable"
   >;
 
   defaultFeeBps: TypedContractMethod<[], [bigint], "view">;
@@ -374,7 +374,7 @@ export interface AMM extends BaseContract {
       recipient: AddressLike
     ],
     [bigint],
-    "nonpayable"
+    "payable"
   >;
 
   transferOwnership: TypedContractMethod<
@@ -402,7 +402,7 @@ export interface AMM extends BaseContract {
         amount1: bigint;
       }
     ],
-    "nonpayable"
+    "payable"
   >;
   getFunction(
     nameOrSignature: "createPool"
@@ -415,7 +415,7 @@ export interface AMM extends BaseContract {
       feeBps: BigNumberish
     ],
     [[string, bigint] & { poolId: string; liquidity: bigint }],
-    "nonpayable"
+    "payable"
   >;
   getFunction(
     nameOrSignature: "defaultFeeBps"
@@ -474,7 +474,7 @@ export interface AMM extends BaseContract {
       recipient: AddressLike
     ],
     [bigint],
-    "nonpayable"
+    "payable"
   >;
   getFunction(
     nameOrSignature: "transferOwnership"

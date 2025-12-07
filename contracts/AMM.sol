@@ -29,6 +29,10 @@ contract AMM is ReentrancyGuard, Ownable {
     // Global default fee in basis points (e.g., 30 = 0.30%)
     uint16 public immutable defaultFeeBps;
 
+    /// @notice Address representing native ETH
+    /// @dev address(0) is used to represent native ETH in token addresses
+    address private constant ETH = address(0);
+
     /// @notice Minimum liquidity to lock forever on first pool creation
     /// @dev This prevents pool drainage attacks by ensuring some liquidity always remains.
     /// The locked liquidity is sent to address(0) and can never be removed.
@@ -112,7 +116,8 @@ contract AMM is ReentrancyGuard, Ownable {
         uint16 feeBps
     ) public pure returns (bytes32 poolId) {
         require(tokenA != tokenB, "identical tokens");
-        require(tokenA != address(0) && tokenB != address(0), "zero address");
+        // Allow address(0) for ETH, but both cannot be ETH
+        require(!(tokenA == ETH && tokenB == ETH), "both ETH");
         (address token0, address token1) = tokenA < tokenB
             ? (tokenA, tokenB)
             : (tokenB, tokenA);
@@ -122,10 +127,11 @@ contract AMM is ReentrancyGuard, Ownable {
     /// @notice Creates a new liquidity pool for a token pair
     /// @dev On first liquidity provision, MINIMUM_LIQUIDITY is locked forever to address(0)
     /// to prevent pool drainage attacks. The user receives liquidity minus MINIMUM_LIQUIDITY.
-    /// @param tokenA First token address
-    /// @param tokenB Second token address
-    /// @param amountA Amount of tokenA to provide
-    /// @param amountB Amount of tokenB to provide
+    /// Supports native ETH using address(0) as token address. When using ETH, send ETH with the transaction.
+    /// @param tokenA First token address (use address(0) for native ETH)
+    /// @param tokenB Second token address (use address(0) for native ETH)
+    /// @param amountA Amount of tokenA to provide (must match msg.value if tokenA is ETH)
+    /// @param amountB Amount of tokenB to provide (must match msg.value if tokenB is ETH)
     /// @param feeBps Optional custom fee in basis points (1-1000). If 0, uses defaultFeeBps.
     /// @return poolId The unique identifier for the pool
     /// @return liquidity The amount of liquidity tokens minted (excluding locked portion)
@@ -135,7 +141,7 @@ contract AMM is ReentrancyGuard, Ownable {
         uint256 amountA,
         uint256 amountB,
         uint16 feeBps
-    ) external nonReentrant returns (bytes32 poolId, uint256 liquidity) {
+    ) external payable nonReentrant returns (bytes32 poolId, uint256 liquidity) {
         require(amountA > 0 && amountB > 0, "insufficient amounts");
 
         // Use provided feeBps if non-zero, otherwise use defaultFeeBps
@@ -145,7 +151,14 @@ contract AMM is ReentrancyGuard, Ownable {
         // Validate fee is within acceptable range (1-1000 basis points)
         require(feeBps > 0 && feeBps <= 1000, "invalid fee");
         require(tokenA != tokenB, "identical tokens");
-        require(tokenA != address(0) && tokenB != address(0), "zero address");
+        // Allow address(0) for ETH, but both cannot be ETH
+        require(!(tokenA == ETH && tokenB == ETH), "both ETH");
+
+        // Validate ETH amount matches msg.value
+        uint256 expectedEth = 0;
+        if (tokenA == ETH) expectedEth += amountA;
+        if (tokenB == ETH) expectedEth += amountB;
+        require(msg.value == expectedEth, "ETH amount mismatch");
 
         (address token0, address token1) = tokenA < tokenB
             ? (tokenA, tokenB)
@@ -206,7 +219,7 @@ contract AMM is ReentrancyGuard, Ownable {
         bytes32 poolId,
         uint256 amount0Desired,
         uint256 amount1Desired
-    ) external nonReentrant returns (uint256 liquidity, uint256 amount0, uint256 amount1) {
+    ) external payable nonReentrant returns (uint256 liquidity, uint256 amount0, uint256 amount1) {
         Pool storage pool = pools[poolId];
         require(pool.exists, "pool not found");
         require(amount0Desired > 0 && amount1Desired > 0, "insufficient amounts");
@@ -224,6 +237,12 @@ contract AMM is ReentrancyGuard, Ownable {
             amount0 = amount0Optimal;
             amount1 = amount1Desired;
         }
+
+        // Validate ETH amount matches msg.value
+        uint256 expectedEth = 0;
+        if (pool.token0 == ETH) expectedEth += amount0;
+        if (pool.token1 == ETH) expectedEth += amount1;
+        require(msg.value == expectedEth, "ETH amount mismatch");
 
         _safeTransferFrom(pool.token0, msg.sender, address(this), amount0);
         _safeTransferFrom(pool.token1, msg.sender, address(this), amount1);
@@ -292,7 +311,7 @@ contract AMM is ReentrancyGuard, Ownable {
         uint256 amountIn,
         uint256 minAmountOut,
         address recipient
-    ) external nonReentrant returns (uint256 amountOut) {
+    ) external payable nonReentrant returns (uint256 amountOut) {
         require(amountIn > 0, "zero input");
         require(recipient != address(0), "zero recipient");
 
@@ -306,6 +325,13 @@ contract AMM is ReentrancyGuard, Ownable {
             zeroForOne = false;
         } else {
             revert("invalid tokenIn");
+        }
+
+        // Validate ETH amount matches msg.value if tokenIn is ETH
+        if (tokenIn == ETH) {
+            require(msg.value == amountIn, "ETH amount mismatch");
+        } else {
+            require(msg.value == 0, "unexpected ETH");
         }
 
         _safeTransferFrom(tokenIn, msg.sender, address(this), amountIn);
@@ -364,10 +390,21 @@ contract AMM is ReentrancyGuard, Ownable {
     }
 
     function _safeTransfer(address token, address to, uint256 value) internal {
-        require(IERC20(token).transfer(to, value), "transfer failed");
+        if (token == ETH) {
+            (bool success, ) = payable(to).call{value: value}("");
+            require(success, "ETH transfer failed");
+        } else {
+            require(IERC20(token).transfer(to, value), "transfer failed");
+        }
     }
 
     function _safeTransferFrom(address token, address from, address to, uint256 value) internal {
-        require(IERC20(token).transferFrom(from, to, value), "transferFrom failed");
+        if (token == ETH) {
+            // For ETH, the value should already be in the contract via msg.value
+            // We just need to verify the contract has enough balance
+            require(address(this).balance >= value, "insufficient ETH balance");
+        } else {
+            require(IERC20(token).transferFrom(from, to, value), "transferFrom failed");
+        }
     }
 }
