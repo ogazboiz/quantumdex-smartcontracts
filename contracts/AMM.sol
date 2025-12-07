@@ -41,6 +41,12 @@ contract AMM is ReentrancyGuard, Ownable {
     /// but large enough to prevent rounding errors and ensure pool stability.
     uint256 private constant MINIMUM_LIQUIDITY = 1000;
 
+    // Custom errors for multi-hop swaps
+    error InvalidPath();
+    error InvalidPathLength();
+    error InvalidPool();
+    error SlippageExceeded();
+
     event PoolCreated(
         bytes32 indexed poolId,
         address indexed token0,
