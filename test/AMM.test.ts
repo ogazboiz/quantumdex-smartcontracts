@@ -666,4 +666,350 @@ describe("AMM Tests", function () {
       expect(pool2.feeBps).to.equal(fee2);
     });
   });
+
+  describe("Issue #9: Native ETH Support", function () {
+    const ETH_ADDRESS = ethers.ZeroAddress;
+
+    it("Should create pool with ETH and ERC20 token", async function () {
+      const { amm, tokenA, deployer } = await loadFixture(deployContractsFixture);
+
+      const ethAmount = ethers.parseEther("1.0"); // 1 ETH
+      const tokenAmount = ethers.parseUnits("2000", 18);
+
+      // Mint tokens
+      await tokenA.mint(deployer.address, tokenAmount);
+      await tokenA.approve(await amm.getAddress(), tokenAmount);
+
+      // Create pool with ETH and token
+      const poolId = await amm.getPoolId(ETH_ADDRESS, await tokenA.getAddress(), FEE_BPS);
+      const tx = await amm.createPool(
+        ETH_ADDRESS,
+        await tokenA.getAddress(),
+        ethAmount,
+        tokenAmount,
+        0,
+        { value: ethAmount }
+      );
+      await tx.wait();
+
+      // Verify pool exists
+      const pool = await amm.getPool(poolId);
+      expect(pool.token0).to.equal(ETH_ADDRESS); // ETH should be token0 (address(0) < tokenA)
+      expect(pool.reserve0).to.equal(ethAmount);
+      expect(pool.reserve1).to.equal(tokenAmount);
+    });
+
+    it("Should add liquidity to ETH/ERC20 pool", async function () {
+      const { amm, tokenA, deployer } = await loadFixture(deployContractsFixture);
+
+      const ethAmount = ethers.parseEther("1.0");
+      const tokenAmount = ethers.parseUnits("2000", 18);
+
+      // Setup and create pool
+      await tokenA.mint(deployer.address, tokenAmount * 2n);
+      await tokenA.approve(await amm.getAddress(), tokenAmount * 2n);
+
+      const poolId = await amm.getPoolId(ETH_ADDRESS, await tokenA.getAddress(), FEE_BPS);
+      const tx1 = await amm.createPool(
+        ETH_ADDRESS,
+        await tokenA.getAddress(),
+        ethAmount,
+        tokenAmount,
+        0,
+        { value: ethAmount }
+      );
+      await tx1.wait();
+
+      // Add more liquidity
+      const tx2 = await amm.addLiquidity(
+        poolId,
+        ethAmount,
+        tokenAmount,
+        { value: ethAmount }
+      );
+      await tx2.wait();
+
+      // Verify reserves increased
+      const pool = await amm.getPool(poolId);
+      expect(pool.reserve0).to.equal(ethAmount * 2n);
+      expect(pool.reserve1).to.equal(tokenAmount * 2n);
+    });
+
+    it("Should remove liquidity from ETH/ERC20 pool", async function () {
+      const { amm, tokenA, deployer } = await loadFixture(deployContractsFixture);
+
+      const ethAmount = ethers.parseEther("1.0");
+      const tokenAmount = ethers.parseUnits("2000", 18);
+
+      // Setup and create pool
+      await tokenA.mint(deployer.address, tokenAmount);
+      await tokenA.approve(await amm.getAddress(), tokenAmount);
+
+      const poolId = await amm.getPoolId(ETH_ADDRESS, await tokenA.getAddress(), FEE_BPS);
+      const tx1 = await amm.createPool(
+        ETH_ADDRESS,
+        await tokenA.getAddress(),
+        ethAmount,
+        tokenAmount,
+        0,
+        { value: ethAmount }
+      );
+      await tx1.wait();
+
+      // Get LP balance
+      const lpBalance = await amm.getLpBalance(poolId, deployer.address);
+      expect(lpBalance).to.be.greaterThan(0);
+
+      // Get initial balances
+      const initialEthBalance = await ethers.provider.getBalance(deployer.address);
+      const initialTokenBalance = await tokenA.balanceOf(deployer.address);
+
+      // Remove liquidity
+      const removeAmount = lpBalance / 2n;
+      const tx2 = await amm.removeLiquidity(poolId, removeAmount);
+      const receipt = await tx2.wait();
+      const gasUsed = receipt!.gasUsed * receipt!.gasPrice;
+
+      // Verify balances changed
+      const finalEthBalance = await ethers.provider.getBalance(deployer.address);
+      const finalTokenBalance = await tokenA.balanceOf(deployer.address);
+
+      // ETH balance should increase (accounting for gas)
+      expect(finalEthBalance + gasUsed).to.be.greaterThan(initialEthBalance);
+      expect(finalTokenBalance).to.be.greaterThan(initialTokenBalance);
+    });
+
+    it("Should swap ETH for ERC20 token", async function () {
+      const { amm, tokenA, deployer } = await loadFixture(deployContractsFixture);
+
+      const ethAmount = ethers.parseEther("10.0");
+      const tokenAmount = ethers.parseUnits("20000", 18);
+      const swapEthAmount = ethers.parseEther("1.0");
+
+      // Setup and create pool
+      await tokenA.mint(deployer.address, tokenAmount);
+      await tokenA.approve(await amm.getAddress(), tokenAmount);
+
+      const poolId = await amm.getPoolId(ETH_ADDRESS, await tokenA.getAddress(), FEE_BPS);
+      const tx1 = await amm.createPool(
+        ETH_ADDRESS,
+        await tokenA.getAddress(),
+        ethAmount,
+        tokenAmount,
+        0,
+        { value: ethAmount }
+      );
+      await tx1.wait();
+
+      // Get initial balances
+      const initialEthBalance = await ethers.provider.getBalance(deployer.address);
+      const initialTokenBalance = await tokenA.balanceOf(deployer.address);
+
+      // Execute swap: ETH -> Token
+      const tx2 = await amm.swap(
+        poolId,
+        ETH_ADDRESS,
+        swapEthAmount,
+        0,
+        deployer.address,
+        { value: swapEthAmount }
+      );
+      const receipt = await tx2.wait();
+      const gasUsed = receipt!.gasUsed * receipt!.gasPrice;
+
+      // Verify balances changed
+      const finalEthBalance = await ethers.provider.getBalance(deployer.address);
+      const finalTokenBalance = await tokenA.balanceOf(deployer.address);
+
+      // ETH should decrease (accounting for gas and swap amount)
+      expect(finalEthBalance + gasUsed + swapEthAmount).to.be.closeTo(initialEthBalance, ethers.parseEther("0.01"));
+      // Token balance should increase
+      expect(finalTokenBalance).to.be.greaterThan(initialTokenBalance);
+    });
+
+    it("Should swap ERC20 token for ETH", async function () {
+      const { amm, tokenA, deployer } = await loadFixture(deployContractsFixture);
+
+      const ethAmount = ethers.parseEther("10.0");
+      const tokenAmount = ethers.parseUnits("20000", 18);
+      const swapTokenAmount = ethers.parseUnits("1000", 18);
+
+      // Setup and create pool
+      await tokenA.mint(deployer.address, tokenAmount + swapTokenAmount);
+      await tokenA.approve(await amm.getAddress(), tokenAmount + swapTokenAmount);
+
+      const poolId = await amm.getPoolId(ETH_ADDRESS, await tokenA.getAddress(), FEE_BPS);
+      const tx1 = await amm.createPool(
+        ETH_ADDRESS,
+        await tokenA.getAddress(),
+        ethAmount,
+        tokenAmount,
+        0,
+        { value: ethAmount }
+      );
+      await tx1.wait();
+
+      // Get initial balances
+      const initialEthBalance = await ethers.provider.getBalance(deployer.address);
+      const initialTokenBalance = await tokenA.balanceOf(deployer.address);
+
+      // Execute swap: Token -> ETH
+      const tx2 = await amm.swap(
+        poolId,
+        await tokenA.getAddress(),
+        swapTokenAmount,
+        0,
+        deployer.address
+      );
+      const receipt = await tx2.wait();
+      const gasUsed = receipt!.gasUsed * receipt!.gasPrice;
+
+      // Verify balances changed
+      const finalEthBalance = await ethers.provider.getBalance(deployer.address);
+      const finalTokenBalance = await tokenA.balanceOf(deployer.address);
+
+      // ETH should increase (accounting for gas)
+      expect(finalEthBalance + gasUsed).to.be.greaterThan(initialEthBalance);
+      // Token balance should decrease
+      expect(finalTokenBalance).to.equal(initialTokenBalance - swapTokenAmount);
+    });
+
+    it("Should reject creating pool with both tokens as ETH", async function () {
+      const { amm, deployer } = await loadFixture(deployContractsFixture);
+
+      const ethAmount = ethers.parseEther("1.0");
+
+      await expect(
+        amm.createPool(
+          ETH_ADDRESS,
+          ETH_ADDRESS,
+          ethAmount,
+          ethAmount,
+          0,
+          { value: ethAmount * 2n }
+        )
+      ).to.be.revertedWith("both ETH");
+    });
+
+    it("Should reject createPool with incorrect ETH amount", async function () {
+      const { amm, tokenA, deployer } = await loadFixture(deployContractsFixture);
+
+      const ethAmount = ethers.parseEther("1.0");
+      const tokenAmount = ethers.parseUnits("2000", 18);
+
+      await tokenA.mint(deployer.address, tokenAmount);
+      await tokenA.approve(await amm.getAddress(), tokenAmount);
+
+      // Try to create pool with wrong ETH amount
+      await expect(
+        amm.createPool(
+          ETH_ADDRESS,
+          await tokenA.getAddress(),
+          ethAmount,
+          tokenAmount,
+          0,
+          { value: ethAmount / 2n } // Wrong amount
+        )
+      ).to.be.revertedWith("ETH amount mismatch");
+    });
+
+    it("Should reject addLiquidity with incorrect ETH amount", async function () {
+      const { amm, tokenA, deployer } = await loadFixture(deployContractsFixture);
+
+      const ethAmount = ethers.parseEther("1.0");
+      const tokenAmount = ethers.parseUnits("2000", 18);
+
+      await tokenA.mint(deployer.address, tokenAmount * 2n);
+      await tokenA.approve(await amm.getAddress(), tokenAmount * 2n);
+
+      const poolId = await amm.getPoolId(ETH_ADDRESS, await tokenA.getAddress(), FEE_BPS);
+      const tx1 = await amm.createPool(
+        ETH_ADDRESS,
+        await tokenA.getAddress(),
+        ethAmount,
+        tokenAmount,
+        0,
+        { value: ethAmount }
+      );
+      await tx1.wait();
+
+      // Try to add liquidity with wrong ETH amount
+      await expect(
+        amm.addLiquidity(
+          poolId,
+          ethAmount,
+          tokenAmount,
+          { value: ethAmount / 2n } // Wrong amount
+        )
+      ).to.be.revertedWith("ETH amount mismatch");
+    });
+
+    it("Should reject swap with incorrect ETH amount", async function () {
+      const { amm, tokenA, deployer } = await loadFixture(deployContractsFixture);
+
+      const ethAmount = ethers.parseEther("10.0");
+      const tokenAmount = ethers.parseUnits("20000", 18);
+      const swapEthAmount = ethers.parseEther("1.0");
+
+      await tokenA.mint(deployer.address, tokenAmount);
+      await tokenA.approve(await amm.getAddress(), tokenAmount);
+
+      const poolId = await amm.getPoolId(ETH_ADDRESS, await tokenA.getAddress(), FEE_BPS);
+      const tx1 = await amm.createPool(
+        ETH_ADDRESS,
+        await tokenA.getAddress(),
+        ethAmount,
+        tokenAmount,
+        0,
+        { value: ethAmount }
+      );
+      await tx1.wait();
+
+      // Try to swap with wrong ETH amount
+      await expect(
+        amm.swap(
+          poolId,
+          ETH_ADDRESS,
+          swapEthAmount,
+          0,
+          deployer.address,
+          { value: swapEthAmount / 2n } // Wrong amount
+        )
+      ).to.be.revertedWith("ETH amount mismatch");
+    });
+
+    it("Should reject swap ERC20 with unexpected ETH", async function () {
+      const { amm, tokenA, deployer } = await loadFixture(deployContractsFixture);
+
+      const ethAmount = ethers.parseEther("10.0");
+      const tokenAmount = ethers.parseUnits("20000", 18);
+      const swapTokenAmount = ethers.parseUnits("1000", 18);
+
+      await tokenA.mint(deployer.address, tokenAmount + swapTokenAmount);
+      await tokenA.approve(await amm.getAddress(), tokenAmount + swapTokenAmount);
+
+      const poolId = await amm.getPoolId(ETH_ADDRESS, await tokenA.getAddress(), FEE_BPS);
+      const tx1 = await amm.createPool(
+        ETH_ADDRESS,
+        await tokenA.getAddress(),
+        ethAmount,
+        tokenAmount,
+        0,
+        { value: ethAmount }
+      );
+      await tx1.wait();
+
+      // Try to swap token but send ETH
+      await expect(
+        amm.swap(
+          poolId,
+          await tokenA.getAddress(),
+          swapTokenAmount,
+          0,
+          deployer.address,
+          { value: ethers.parseEther("0.1") } // Unexpected ETH
+        )
+      ).to.be.revertedWith("unexpected ETH");
+    });
+  });
 });
