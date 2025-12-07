@@ -460,8 +460,40 @@ contract AMM is ReentrancyGuard, Ownable {
             revert InvalidPool();
         }
         
-        // TODO: Implement hop execution logic
-        revert("Not implemented");
+        // Determine swap direction
+        bool zeroForOne;
+        if (tokenIn == pool.token0 && tokenOut == pool.token1) {
+            zeroForOne = true;
+        } else if (tokenIn == pool.token1 && tokenOut == pool.token0) {
+            zeroForOne = false;
+        } else {
+            revert InvalidPath();
+        }
+        
+        // Get reserves
+        (uint112 reserve0, uint112 reserve1) = (pool.reserve0, pool.reserve1);
+        require(reserve0 > 0 && reserve1 > 0, "no reserves");
+        
+        // Calculate amount out with fee
+        uint256 amountInWithFee = (amountIn * (10000 - pool.feeBps)) / 10000;
+        
+        if (zeroForOne) {
+            amountOut = _getAmountOut(amountInWithFee, reserve0, reserve1);
+            pool.reserve0 = uint112(uint256(reserve0) + amountIn);
+            pool.reserve1 = uint112(uint256(reserve1) - amountOut);
+        } else {
+            amountOut = _getAmountOut(amountInWithFee, reserve1, reserve0);
+            pool.reserve1 = uint112(uint256(reserve1) + amountIn);
+            pool.reserve0 = uint112(uint256(reserve0) - amountOut);
+        }
+        
+        // Transfer output token to recipient
+        _safeTransfer(tokenOut, recipient, amountOut);
+        
+        // Emit Swap event for this hop
+        emit Swap(poolId, msg.sender, tokenIn, amountIn, amountOut, recipient);
+        
+        return amountOut;
     }
 
     function _getAmountOut(
