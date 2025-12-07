@@ -1,8 +1,8 @@
 
-import { configVariable, defineConfig } from "hardhat/config";
-import "@nomicfoundation/hardhat-toolbox-viem";
+import { HardhatUserConfig } from "hardhat/config";
+import "@nomicfoundation/hardhat-toolbox";
 
-export default defineConfig({
+const config: HardhatUserConfig = {
   solidity: {
     compilers: [
       {
@@ -175,4 +175,9 @@ export default defineConfig({
   sourcify: {
     enabled: false,
   },
-});
+  mocha: {
+    timeout: 40000,
+  },
+};
+
+export default config;
