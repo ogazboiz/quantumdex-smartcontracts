@@ -204,65 +204,83 @@ Allow users to specify custom fee when creating a pool, instead of using a globa
 
 ---
 
-## ❌ Pending Issues
-
 ### Issue #9: Native ETH Support
-**Status:** ❌ PENDING  
-**Labels:** `smart-contracts`, `feature`, `enhancement`  
+**Status:** ✅ COMPLETED  
+**Labels:** `smart-contracts`, `feature`, `enhancement`, `completed`  
 **Priority:** LOW
 
 **Description:**
 Extend AMM to support native ETH (WETH) in addition to ERC20 tokens. This would allow users to trade ETH directly without wrapping.
 
 **Current State:**
-- Contract only supports ERC20 tokens
-- Users must wrap ETH to WETH first
+- ✅ Contract supports native ETH using address(0) pattern
+- ✅ Users can trade ETH directly without wrapping
 
 **Acceptance Criteria:**
-- [ ] Add support for native ETH (address(0) or special address)
-- [ ] Modify functions to handle ETH transfers
-- [ ] Use `payable` functions where needed
-- [ ] Handle ETH wrapping/unwrapping
-- [ ] Update all functions to support both ERC20 and ETH
-- [ ] Add tests for ETH swaps
-- [ ] Update frontend to support ETH
+- [x] Add support for native ETH (address(0) or special address)
+- [x] Modify functions to handle ETH transfers
+- [x] Use `payable` functions where needed
+- [x] Handle ETH wrapping/unwrapping (native ETH handled directly, no wrapping needed)
+- [x] Update all functions to support both ERC20 and ETH
+- [x] Add tests for ETH swaps
+- [ ] Update frontend to support ETH (frontend repo, not in scope for smart contracts)
 
 **Technical Notes:**
 - Can use WETH pattern or handle native ETH directly
 - Need to modify transfer functions to handle `address(0)` as ETH
 - Consider gas costs of wrapping/unwrapping
 
+**Implementation Notes:**
+- Native ETH support implemented using `address(0)` as ETH identifier
+- `ETH` constant defined as `address(0)` in AMM contract
+- All relevant functions (`createPool`, `addLiquidity`, `removeLiquidity`, `swap`) are `payable`
+- `_safeTransfer` and `_safeTransferFrom` helper functions handle both ERC20 and ETH
+- ETH validation ensures `msg.value` matches expected ETH amounts
+- Comprehensive test suite covers ETH pool creation, liquidity operations, and swaps
+- Contract located at `contracts/AMM.sol`
+- Tests located at `test/AMM.test.ts` (Issue #9 test suite)
+
 ---
 
-### Issue #10: Multi-hop Swaps
-**Status:** ❌ PENDING  
-**Labels:** `smart-contracts`, `feature`, `enhancement`  
+#### Issue 10: Multi-hop Swaps
+**Status:** ✅ COMPLETED  
+**Labels:** `smart-contracts`, `feature`, `enhancement`, `completed`  
 **Priority:** LOW
 
 **Description:**
-Implement multi-hop swap functionality to allow swaps through multiple pools in a single transaction (e.g., A → B → C).
+Extend AMM to support native ETH (WETH) in addition to ERC20 tokens. This would allow users to trade ETH directly without wrapping.
 
 **Current State:**
-- Only direct swaps supported (A → B)
-- Users must do multiple transactions for multi-hop swaps
+- ✅ Contract supports native ETH using address(0) pattern
+- ✅ Users can trade ETH directly without wrapping
 
 **Acceptance Criteria:**
-- [ ] Add `swapMultiHop` function
-- [ ] Accept array of pool IDs and tokens
-- [ ] Execute swaps sequentially
-- [ ] Calculate optimal path (or let user specify)
-- [ ] Apply slippage protection to final output
-- [ ] Emit events for each hop
-- [ ] Add tests for multi-hop swaps
-- [ ] Gas optimization considerations
+- [x] Add support for native ETH (address(0) or special address)
+- [x] Modify functions to handle ETH transfers
+- [x] Use `payable` functions where needed
+- [x] Handle ETH wrapping/unwrapping (native ETH handled directly, no wrapping needed)
+- [x] Update all functions to support both ERC20 and ETH
+- [x] Add tests for ETH swaps
+- [ ] Update frontend to support ETH (frontend repo, not in scope for smart contracts)
 
 **Technical Notes:**
-- Path: `[tokenA, poolId1, tokenB, poolId2, tokenC]`
-- Each hop uses the previous output as input
-- Final slippage check on last output
-- Consider gas costs vs. separate transactions
+- Can use WETH pattern or handle native ETH directly
+- Need to modify transfer functions to handle `address(0)` as ETH
+- Consider gas costs of wrapping/unwrapping
+
+**Implementation Notes:**
+- Native ETH support implemented using `address(0)` as ETH identifier
+- `ETH` constant defined as `address(0)` in AMM contract
+- All relevant functions (`createPool`, `addLiquidity`, `removeLiquidity`, `swap`) are `payable`
+- `_safeTransfer` and `_safeTransferFrom` helper functions handle both ERC20 and ETH
+- ETH validation ensures `msg.value` matches expected ETH amounts
+- Comprehensive test suite covers ETH pool creation, liquidity operations, and swaps
+- Contract located at `contracts/AMM.sol`
+- Tests located at `test/AMM.test.ts` (Issue #9 test suite)
 
 ---
+
+## ❌ Pending Issues
 
 ### Issue #11: Flash Loans
 **Status:** ❌ PENDING  

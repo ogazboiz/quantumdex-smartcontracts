@@ -1012,4 +1012,264 @@ describe("AMM Tests", function () {
       ).to.be.revertedWith("unexpected ETH");
     });
   });
+
+  describe("Issue #10: Multi-hop Swaps", function () {
+    it("Should execute 2-hop swap (TokenA -> TokenB -> TokenC)", async function () {
+      const { amm, tokenA, tokenB, deployer } = await loadFixture(deployContractsFixture);
+
+      // Deploy third token
+      const MockTokenFactory = await ethers.getContractFactory("MockToken", deployer);
+      const tokenC = await MockTokenFactory.deploy("TokenC", "TKC", 18);
+      await tokenC.waitForDeployment();
+
+      const amountA = ethers.parseUnits("1000", 18);
+      const amountB = ethers.parseUnits("2000", 18);
+      const amountC = ethers.parseUnits("3000", 18);
+      const swapAmount = ethers.parseUnits("100", 18);
+
+      // Setup tokens
+      await tokenA.mint(deployer.address, amountA + swapAmount);
+      await tokenB.mint(deployer.address, amountB * 2n);
+      await tokenC.mint(deployer.address, amountC);
+
+      await tokenA.approve(await amm.getAddress(), amountA + swapAmount);
+      await tokenB.approve(await amm.getAddress(), amountB * 2n);
+      await tokenC.approve(await amm.getAddress(), amountC);
+
+      // Create pool A-B
+      const poolIdAB = await amm.getPoolId(await tokenA.getAddress(), await tokenB.getAddress(), FEE_BPS);
+      const tx1 = await amm.createPool(
+        await tokenA.getAddress(),
+        await tokenB.getAddress(),
+        amountA,
+        amountB,
+        0
+      );
+      await tx1.wait();
+
+      // Create pool B-C
+      const poolIdBC = await amm.getPoolId(await tokenB.getAddress(), await tokenC.getAddress(), FEE_BPS);
+      const tx2 = await amm.createPool(
+        await tokenB.getAddress(),
+        await tokenC.getAddress(),
+        amountB,
+        amountC,
+        0
+      );
+      await tx2.wait();
+
+      // Get initial balances
+      const initialBalanceA = await tokenA.balanceOf(deployer.address);
+      const initialBalanceC = await tokenC.balanceOf(deployer.address);
+
+      // Execute multi-hop swap: A -> B -> C
+      const path = [await tokenA.getAddress(), await tokenB.getAddress(), await tokenC.getAddress()];
+      const poolIds = [poolIdAB, poolIdBC];
+
+      const tx3 = await amm.swapMultiHop(path, poolIds, swapAmount, 0, deployer.address);
+      const receipt = await tx3.wait();
+
+      // Verify balances changed
+      const finalBalanceA = await tokenA.balanceOf(deployer.address);
+      const finalBalanceC = await tokenC.balanceOf(deployer.address);
+
+      expect(finalBalanceA).to.equal(initialBalanceA - swapAmount);
+      expect(finalBalanceC).to.be.greaterThan(initialBalanceC);
+
+      // Verify events were emitted
+      const swapEvents = receipt!.logs.filter(
+        (log: any) => log.fragment && log.fragment.name === "Swap"
+      );
+      expect(swapEvents.length).to.equal(2); // Two hops
+
+      const multiHopEvent = receipt!.logs.find(
+        (log: any) => log.fragment && log.fragment.name === "MultiHopSwap"
+      );
+      expect(multiHopEvent).to.not.be.undefined;
+    });
+
+    it("Should execute 3-hop swap (TokenA -> TokenB -> TokenC -> TokenD)", async function () {
+      const { amm, tokenA, tokenB, deployer } = await loadFixture(deployContractsFixture);
+
+      // Deploy third and fourth tokens
+      const MockTokenFactory = await ethers.getContractFactory("MockToken", deployer);
+      const tokenC = await MockTokenFactory.deploy("TokenC", "TKC", 18);
+      await tokenC.waitForDeployment();
+      const tokenD = await MockTokenFactory.deploy("TokenD", "TKD", 18);
+      await tokenD.waitForDeployment();
+
+      const amount = ethers.parseUnits("1000", 18);
+      const swapAmount = ethers.parseUnits("50", 18);
+
+      // Setup tokens
+      await tokenA.mint(deployer.address, amount + swapAmount);
+      await tokenB.mint(deployer.address, amount * 2n);
+      await tokenC.mint(deployer.address, amount * 2n);
+      await tokenD.mint(deployer.address, amount);
+
+      await tokenA.approve(await amm.getAddress(), amount + swapAmount);
+      await tokenB.approve(await amm.getAddress(), amount * 2n);
+      await tokenC.approve(await amm.getAddress(), amount * 2n);
+      await tokenD.approve(await amm.getAddress(), amount);
+
+      // Create pools
+      const poolIdAB = await amm.getPoolId(await tokenA.getAddress(), await tokenB.getAddress(), FEE_BPS);
+      await amm.createPool(await tokenA.getAddress(), await tokenB.getAddress(), amount, amount, 0);
+
+      const poolIdBC = await amm.getPoolId(await tokenB.getAddress(), await tokenC.getAddress(), FEE_BPS);
+      await amm.createPool(await tokenB.getAddress(), await tokenC.getAddress(), amount, amount, 0);
+
+      const poolIdCD = await amm.getPoolId(await tokenC.getAddress(), await tokenD.getAddress(), FEE_BPS);
+      await amm.createPool(await tokenC.getAddress(), await tokenD.getAddress(), amount, amount, 0);
+
+      // Get initial balances
+      const initialBalanceA = await tokenA.balanceOf(deployer.address);
+      const initialBalanceD = await tokenD.balanceOf(deployer.address);
+
+      // Execute 3-hop swap: A -> B -> C -> D
+      const path = [
+        await tokenA.getAddress(),
+        await tokenB.getAddress(),
+        await tokenC.getAddress(),
+        await tokenD.getAddress()
+      ];
+      const poolIds = [poolIdAB, poolIdBC, poolIdCD];
+
+      const tx = await amm.swapMultiHop(path, poolIds, swapAmount, 0, deployer.address);
+      const receipt = await tx.wait();
+
+      // Verify balances
+      const finalBalanceA = await tokenA.balanceOf(deployer.address);
+      const finalBalanceD = await tokenD.balanceOf(deployer.address);
+
+      expect(finalBalanceA).to.equal(initialBalanceA - swapAmount);
+      expect(finalBalanceD).to.be.greaterThan(initialBalanceD);
+
+      // Verify 3 Swap events were emitted
+      const swapEvents = receipt!.logs.filter(
+        (log: any) => log.fragment && log.fragment.name === "Swap"
+      );
+      expect(swapEvents.length).to.equal(3);
+    });
+
+    it("Should enforce slippage protection on final output", async function () {
+      const { amm, tokenA, tokenB, deployer } = await loadFixture(deployContractsFixture);
+
+      const MockTokenFactory = await ethers.getContractFactory("MockToken", deployer);
+      const tokenC = await MockTokenFactory.deploy("TokenC", "TKC", 18);
+      await tokenC.waitForDeployment();
+
+      const amount = ethers.parseUnits("1000", 18);
+      const swapAmount = ethers.parseUnits("100", 18);
+
+      // Setup and create pools
+      await tokenA.mint(deployer.address, amount + swapAmount);
+      await tokenB.mint(deployer.address, amount * 2n);
+      await tokenC.mint(deployer.address, amount);
+
+      await tokenA.approve(await amm.getAddress(), amount + swapAmount);
+      await tokenB.approve(await amm.getAddress(), amount * 2n);
+      await tokenC.approve(await amm.getAddress(), amount);
+
+      const poolIdAB = await amm.getPoolId(await tokenA.getAddress(), await tokenB.getAddress(), FEE_BPS);
+      await amm.createPool(await tokenA.getAddress(), await tokenB.getAddress(), amount, amount, 0);
+
+      const poolIdBC = await amm.getPoolId(await tokenB.getAddress(), await tokenC.getAddress(), FEE_BPS);
+      await amm.createPool(await tokenB.getAddress(), await tokenC.getAddress(), amount, amount, 0);
+
+      const path = [await tokenA.getAddress(), await tokenB.getAddress(), await tokenC.getAddress()];
+      const poolIds = [poolIdAB, poolIdBC];
+
+      // Try with unrealistic minAmountOut (should fail)
+      const unrealisticMin = ethers.parseUnits("10000", 18);
+      await expect(
+        amm.swapMultiHop(path, poolIds, swapAmount, unrealisticMin, deployer.address)
+      ).to.be.revertedWith("slippage");
+    });
+
+    it("Should reject invalid path length", async function () {
+      const { amm, tokenA, deployer } = await loadFixture(deployContractsFixture);
+
+      await expect(
+        amm.swapMultiHop([await tokenA.getAddress()], [], 1000, 0, deployer.address)
+      ).to.be.revertedWith("invalid path");
+    });
+
+    it("Should reject mismatched poolIds length", async function () {
+      const { amm, tokenA, tokenB, deployer } = await loadFixture(deployContractsFixture);
+
+      const path = [await tokenA.getAddress(), await tokenB.getAddress()];
+      const poolIds: any[] = []; // Empty array, should have 1 poolId
+
+      await expect(
+        amm.swapMultiHop(path, poolIds, 1000, 0, deployer.address)
+      ).to.be.revertedWith("invalid poolIds length");
+    });
+
+    it("Should reject invalid pool in path", async function () {
+      const { amm, tokenA, tokenB, deployer } = await loadFixture(deployContractsFixture);
+
+      const MockTokenFactory = await ethers.getContractFactory("MockToken", deployer);
+      const tokenC = await MockTokenFactory.deploy("TokenC", "TKC", 18);
+      await tokenC.waitForDeployment();
+
+      const amount = ethers.parseUnits("1000", 18);
+      const swapAmount = ethers.parseUnits("100", 18);
+
+      await tokenA.mint(deployer.address, amount + swapAmount);
+      await tokenB.mint(deployer.address, amount);
+      await tokenC.mint(deployer.address, amount);
+
+      await tokenA.approve(await amm.getAddress(), amount + swapAmount);
+      await tokenB.approve(await amm.getAddress(), amount);
+      await tokenC.approve(await amm.getAddress(), amount);
+
+      // Create only pool A-B, but try to swap A -> B -> C
+      const poolIdAB = await amm.getPoolId(await tokenA.getAddress(), await tokenB.getAddress(), FEE_BPS);
+      await amm.createPool(await tokenA.getAddress(), await tokenB.getAddress(), amount, amount, 0);
+
+      const fakePoolId = ethers.keccak256(ethers.toUtf8Bytes("fake"));
+      const path = [await tokenA.getAddress(), await tokenB.getAddress(), await tokenC.getAddress()];
+      const poolIds = [poolIdAB, fakePoolId];
+
+      await expect(
+        amm.swapMultiHop(path, poolIds, swapAmount, 0, deployer.address)
+      ).to.be.revertedWith("pool not found");
+    });
+
+    it("Should reject invalid token path in pool", async function () {
+      const { amm, tokenA, tokenB, deployer } = await loadFixture(deployContractsFixture);
+
+      const MockTokenFactory = await ethers.getContractFactory("MockToken", deployer);
+      const tokenC = await MockTokenFactory.deploy("TokenC", "TKC", 18);
+      await tokenC.waitForDeployment();
+
+      const amount = ethers.parseUnits("1000", 18);
+      const swapAmount = ethers.parseUnits("100", 18);
+
+      await tokenA.mint(deployer.address, amount + swapAmount);
+      await tokenB.mint(deployer.address, amount);
+      await tokenC.mint(deployer.address, amount);
+
+      await tokenA.approve(await amm.getAddress(), amount + swapAmount);
+      await tokenB.approve(await amm.getAddress(), amount);
+      await tokenC.approve(await amm.getAddress(), amount);
+
+      // Create pool A-B
+      const poolIdAB = await amm.getPoolId(await tokenA.getAddress(), await tokenB.getAddress(), FEE_BPS);
+      await amm.createPool(await tokenA.getAddress(), await tokenB.getAddress(), amount, amount, 0);
+
+      // Create pool B-C
+      const poolIdBC = await amm.getPoolId(await tokenB.getAddress(), await tokenC.getAddress(), FEE_BPS);
+      await amm.createPool(await tokenB.getAddress(), await tokenC.getAddress(), amount, amount, 0);
+
+      // Try invalid path: A -> C -> B (pool A-B doesn't connect to C)
+      const path = [await tokenA.getAddress(), await tokenC.getAddress(), await tokenB.getAddress()];
+      const poolIds = [poolIdAB, poolIdBC];
+
+      await expect(
+        amm.swapMultiHop(path, poolIds, swapAmount, 0, deployer.address)
+      ).to.be.revertedWith("invalid path");
+    });
+  });
 });
