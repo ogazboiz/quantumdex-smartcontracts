@@ -1077,7 +1077,6 @@ describe("AMM Tests", function () {
       expect(finalBalanceC).to.be.greaterThan(initialBalanceC);
 
       // Verify events were emitted - use contract interface to parse logs
-      const swapEventFilter = amm.filters.Swap();
       const swapEvents = receipt!.logs.filter((log: any) => {
         try {
           return amm.interface.parseLog(log)?.name === "Swap";
