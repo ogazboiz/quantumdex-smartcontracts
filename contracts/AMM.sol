@@ -670,14 +670,15 @@ contract AMM is ReentrancyGuard, Ownable {
             bool isLastHop = (i == numHops - 1);
 
             Pool storage pool = pools[poolId];
-            require(pool.exists, "pool not found");
+            if (!pool.exists) revert PoolNotFound();
 
             // Verify the pool contains currentToken and nextToken
-            require(
-                (pool.token0 == currentToken && pool.token1 == nextToken) ||
-                (pool.token1 == currentToken && pool.token0 == nextToken),
-                "invalid path"
-            );
+            if (
+                !((pool.token0 == currentToken && pool.token1 == nextToken) ||
+                (pool.token1 == currentToken && pool.token0 == nextToken))
+            ) {
+                revert InvalidPath();
+            }
 
             // Execute swap for this hop
             currentAmount = _executeHop(pool, currentToken, currentAmount, isLastHop ? recipient : address(this));
@@ -701,7 +702,7 @@ contract AMM is ReentrancyGuard, Ownable {
         address recipient
     ) internal returns (uint256 amountOut) {
         (uint112 reserve0, uint112 reserve1) = (pool.reserve0, pool.reserve1);
-        require(reserve0 > 0 && reserve1 > 0, "no reserves");
+        if (reserve0 == 0 || reserve1 == 0) revert NoReserves();
 
         bool zeroForOne = (tokenIn == pool.token0);
         uint256 amountInWithFee = (amountIn * (10000 - pool.feeBps)) / 10000;
