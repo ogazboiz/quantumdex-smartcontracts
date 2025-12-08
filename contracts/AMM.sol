@@ -119,6 +119,14 @@ contract AMM is ReentrancyGuard, Ownable {
         address recipient
     );
 
+    event FlashLoan(
+        bytes32 indexed poolId,
+        address indexed token,
+        address indexed borrower,
+        uint256 amount,
+        uint256 fee
+    );
+
     constructor(uint16 _defaultFeeBps) Ownable(msg.sender) {
         require(_defaultFeeBps <= 1000, "fee too high");
         defaultFeeBps = _defaultFeeBps;
