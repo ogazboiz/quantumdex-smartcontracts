@@ -1272,4 +1272,225 @@ describe("AMM Tests", function () {
       ).to.be.revertedWith("invalid path");
     });
   });
+
+  describe("Issue #11: Flash Loans", function () {
+    const FLASH_LOAN_FEE_BPS = 9; // 0.09%
+
+    async function setupFlashLoanFixture() {
+      const base = await deployContractsFixture();
+      const { amm, tokenA, tokenB, deployer, alice } = base;
+
+      // Create a pool with liquidity
+      const amountA = ethers.parseUnits("10000", 18);
+      const amountB = ethers.parseUnits("20000", 18);
+
+      await tokenA.mint(deployer.address, amountA);
+      await tokenB.mint(deployer.address, amountB);
+      await tokenA.approve(await amm.getAddress(), amountA);
+      await tokenB.approve(await amm.getAddress(), amountB);
+
+      const poolId = await amm.getPoolId(await tokenA.getAddress(), await tokenB.getAddress(), FEE_BPS);
+      await amm.createPool(await tokenA.getAddress(), await tokenB.getAddress(), amountA, amountB, 0);
+
+      // Deploy FlashLoanReceiver
+      const FlashLoanReceiverFactory = await ethers.getContractFactory("FlashLoanReceiver", deployer);
+      const receiver = await FlashLoanReceiverFactory.deploy(await amm.getAddress());
+      await receiver.waitForDeployment();
+
+      return {
+        ...base,
+        poolId,
+        receiver,
+        amountA,
+        amountB,
+      };
+    }
+
+    it("Should execute successful flash loan with repayment", async function () {
+      const { amm, tokenA, poolId, receiver, deployer } = await loadFixture(setupFlashLoanFixture);
+
+      const flashLoanAmount = ethers.parseUnits("1000", 18);
+      const fee = (flashLoanAmount * BigInt(FLASH_LOAN_FEE_BPS)) / BigInt(10000);
+      const repayAmount = flashLoanAmount + fee;
+
+      // Fund receiver to repay
+      await tokenA.mint(await receiver.getAddress(), repayAmount);
+      await tokenA.connect(await ethers.getSigner(await receiver.getAddress())).approve(await amm.getAddress(), repayAmount);
+
+      // Get initial balances
+      const poolBefore = await amm.getPool(poolId);
+      const receiverBalanceBefore = await tokenA.balanceOf(await receiver.getAddress());
+
+      // Execute flash loan
+      await receiver.executeFlashLoan(poolId, await tokenA.getAddress(), flashLoanAmount, "0x");
+
+      // Verify callback was called
+      expect(await receiver.lastToken()).to.equal(await tokenA.getAddress());
+      expect(await receiver.lastAmount()).to.equal(flashLoanAmount);
+      expect(await receiver.lastFee()).to.equal(fee);
+
+      // Verify pool reserves increased by fee
+      const poolAfter = await amm.getPool(poolId);
+      expect(poolAfter.reserve0).to.equal(poolBefore.reserve0 + repayAmount);
+
+      // Verify receiver balance decreased by repay amount
+      const receiverBalanceAfter = await tokenA.balanceOf(await receiver.getAddress());
+      expect(receiverBalanceAfter).to.equal(receiverBalanceBefore - repayAmount);
+    });
+
+    it("Should calculate flash loan fee correctly (9 bps)", async function () {
+      const { amm, tokenA, poolId, receiver, deployer } = await loadFixture(setupFlashLoanFixture);
+
+      const flashLoanAmount = ethers.parseUnits("10000", 18);
+      const expectedFee = (flashLoanAmount * BigInt(FLASH_LOAN_FEE_BPS)) / BigInt(10000);
+      const repayAmount = flashLoanAmount + expectedFee;
+
+      // Fund receiver
+      await tokenA.mint(await receiver.getAddress(), repayAmount);
+      await tokenA.connect(await ethers.getSigner(await receiver.getAddress())).approve(await amm.getAddress(), repayAmount);
+
+      await receiver.executeFlashLoan(poolId, await tokenA.getAddress(), flashLoanAmount, "0x");
+
+      // Verify fee is exactly 9 bps
+      const actualFee = await receiver.lastFee();
+      expect(actualFee).to.equal(expectedFee);
+      expect(actualFee).to.equal((flashLoanAmount * BigInt(9)) / BigInt(10000));
+    });
+
+    it("Should revert if flash loan is not repaid", async function () {
+      const { amm, tokenA, poolId, receiver } = await loadFixture(setupFlashLoanFixture);
+
+      const flashLoanAmount = ethers.parseUnits("1000", 18);
+
+      // Configure receiver to not repay
+      await receiver.setShouldRepay(false);
+
+      await expect(
+        receiver.executeFlashLoan(poolId, await tokenA.getAddress(), flashLoanAmount, "0x")
+      ).to.be.revertedWithCustomError(amm, "FlashLoanNotRepaid");
+    });
+
+    it("Should revert if flash loan is underpaid", async function () {
+      const { amm, tokenA, poolId, receiver, deployer } = await loadFixture(setupFlashLoanFixture);
+
+      const flashLoanAmount = ethers.parseUnits("1000", 18);
+      const fee = (flashLoanAmount * BigInt(FLASH_LOAN_FEE_BPS)) / BigInt(10000);
+      const repayAmount = flashLoanAmount + fee;
+
+      // Fund receiver with less than required
+      const underPayment = repayAmount - BigInt(1);
+      await tokenA.mint(await receiver.getAddress(), underPayment);
+      await tokenA.connect(await ethers.getSigner(await receiver.getAddress())).approve(await amm.getAddress(), underPayment);
+
+      // Set custom repay amount to underpay
+      await receiver.setRepayAmountOverride(underPayment);
+
+      await expect(
+        receiver.executeFlashLoan(poolId, await tokenA.getAddress(), flashLoanAmount, "0x")
+      ).to.be.revertedWithCustomError(amm, "FlashLoanNotRepaid");
+    });
+
+    it("Should revert if pool does not exist", async function () {
+      const { amm, tokenA, receiver } = await loadFixture(setupFlashLoanFixture);
+
+      const fakePoolId = ethers.keccak256(ethers.toUtf8Bytes("fake"));
+      const flashLoanAmount = ethers.parseUnits("1000", 18);
+
+      await expect(
+        receiver.executeFlashLoan(fakePoolId, await tokenA.getAddress(), flashLoanAmount, "0x")
+      ).to.be.revertedWith("pool not found");
+    });
+
+    it("Should revert if token is not part of pool", async function () {
+      const { amm, tokenA, tokenB, poolId, receiver, deployer } = await loadFixture(setupFlashLoanFixture);
+
+      // Create another token
+      const MockTokenFactory = await ethers.getContractFactory("MockToken", deployer);
+      const tokenC = await MockTokenFactory.deploy("TokenC", "TKC", 18);
+      await tokenC.waitForDeployment();
+
+      const flashLoanAmount = ethers.parseUnits("1000", 18);
+
+      await expect(
+        receiver.executeFlashLoan(poolId, await tokenC.getAddress(), flashLoanAmount, "0x")
+      ).to.be.revertedWith("invalid token");
+    });
+
+    it("Should revert if amount is zero", async function () {
+      const { amm, tokenA, poolId, receiver } = await loadFixture(setupFlashLoanFixture);
+
+      await expect(
+        receiver.executeFlashLoan(poolId, await tokenA.getAddress(), 0, "0x")
+      ).to.be.revertedWith("zero amount");
+    });
+
+    it("Should revert if pool has insufficient liquidity", async function () {
+      const { amm, tokenA, poolId, receiver } = await loadFixture(setupFlashLoanFixture);
+
+      // Try to borrow more than pool has
+      const pool = await amm.getPool(poolId);
+      const excessiveAmount = pool.reserve0 + BigInt(1);
+
+      await expect(
+        receiver.executeFlashLoan(poolId, await tokenA.getAddress(), excessiveAmount, "0x")
+      ).to.be.revertedWith("insufficient liquidity");
+    });
+
+    it("Should support flash loan for token1", async function () {
+      const { amm, tokenB, poolId, receiver, deployer } = await loadFixture(setupFlashLoanFixture);
+
+      const flashLoanAmount = ethers.parseUnits("2000", 18);
+      const fee = (flashLoanAmount * BigInt(FLASH_LOAN_FEE_BPS)) / BigInt(10000);
+      const repayAmount = flashLoanAmount + fee;
+
+      // Fund receiver
+      await tokenB.mint(await receiver.getAddress(), repayAmount);
+      await tokenB.connect(await ethers.getSigner(await receiver.getAddress())).approve(await amm.getAddress(), repayAmount);
+
+      const poolBefore = await amm.getPool(poolId);
+
+      await receiver.executeFlashLoan(poolId, await tokenB.getAddress(), flashLoanAmount, "0x");
+
+      // Verify pool reserves increased by fee
+      const poolAfter = await amm.getPool(poolId);
+      expect(poolAfter.reserve1).to.equal(poolBefore.reserve1 + repayAmount);
+    });
+
+    it("Should pass data to callback", async function () {
+      const { amm, tokenA, poolId, receiver, deployer } = await loadFixture(setupFlashLoanFixture);
+
+      const flashLoanAmount = ethers.parseUnits("1000", 18);
+      const fee = (flashLoanAmount * BigInt(FLASH_LOAN_FEE_BPS)) / BigInt(10000);
+      const repayAmount = flashLoanAmount + fee;
+      const testData = ethers.toUtf8Bytes("test data");
+
+      // Fund receiver
+      await tokenA.mint(await receiver.getAddress(), repayAmount);
+      await tokenA.connect(await ethers.getSigner(await receiver.getAddress())).approve(await amm.getAddress(), repayAmount);
+
+      await receiver.executeFlashLoan(poolId, await tokenA.getAddress(), flashLoanAmount, testData);
+
+      // Verify data was passed
+      const receivedData = await receiver.lastData();
+      expect(ethers.toUtf8String(receivedData)).to.equal("test data");
+    });
+
+    it("Should emit FlashLoan event", async function () {
+      const { amm, tokenA, poolId, receiver, deployer } = await loadFixture(setupFlashLoanFixture);
+
+      const flashLoanAmount = ethers.parseUnits("1000", 18);
+      const fee = (flashLoanAmount * BigInt(FLASH_LOAN_FEE_BPS)) / BigInt(10000);
+      const repayAmount = flashLoanAmount + fee;
+
+      // Fund receiver
+      await tokenA.mint(await receiver.getAddress(), repayAmount);
+      await tokenA.connect(await ethers.getSigner(await receiver.getAddress())).approve(await amm.getAddress(), repayAmount);
+
+      await expect(
+        receiver.executeFlashLoan(poolId, await tokenA.getAddress(), flashLoanAmount, "0x")
+      )
+        .to.emit(amm, "FlashLoan")
+        .withArgs(poolId, await tokenA.getAddress(), await receiver.getAddress(), flashLoanAmount, fee);
+    });
+  });
 });
