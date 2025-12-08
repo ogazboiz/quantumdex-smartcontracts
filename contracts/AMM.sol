@@ -553,7 +553,7 @@ contract AMM is ReentrancyGuard, Ownable {
         require(amountOut > 0, "zero output");
         
         // Emit MultiHopSwap event
-        emit MultiHopSwap(msg.sender, path, poolIds, amountIn, amountOut, recipient);
+        emit MultiHopSwap(msg.sender, path[0], path[path.length - 1], path, poolIds, amountIn, amountOut, recipient);
     }
 
     /// @notice Validate multi-hop swap path format
