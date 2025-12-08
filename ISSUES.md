@@ -280,8 +280,6 @@ Extend AMM to support native ETH (WETH) in addition to ERC20 tokens. This would 
 
 ---
 
-## ❌ Pending Issues
-
 ### Issue #11: Flash Loans
 **Status:** ✅ COMPLETED  
 **Labels:** `smart-contracts`, `feature`, `advanced`  
@@ -314,6 +312,8 @@ Implement flash loan functionality to allow users to borrow tokens from pools wi
 - Security audit still recommended before mainnet deployment
 
 ---
+
+## ❌ Pending Issues
 
 ### Issue #12: Gas Optimization
 **Status:** ❌ PENDING  

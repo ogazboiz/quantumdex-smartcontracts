@@ -461,7 +461,9 @@ contract AMM is ReentrancyGuard, Ownable {
             revert FlashLoanNotRepaid();
         }
         
-        // Update reserves (add fee to reserves)
+        // Update reserves: add full repayment (amount + fee)
+        // Flash loans are temporary - we don't reduce reserves when lending,
+        // but we add the full repayment back, effectively increasing reserves by the fee
         if (token == pool.token0) {
             pool.reserve0 = uint112(uint256(pool.reserve0) + repayAmount);
         } else {
