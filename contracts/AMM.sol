@@ -369,6 +369,111 @@ contract AMM is ReentrancyGuard, Ownable {
         emit Swap(poolId, msg.sender, tokenIn, amountIn, amountOut, recipient);
     }
 
+    /// @notice Execute a multi-hop swap through multiple pools
+    /// @dev Executes swaps sequentially, using output of one hop as input to the next
+    /// @param path Array of token addresses [tokenA, tokenB, tokenC, ...]
+    /// @param poolIds Array of pool IDs [poolId1, poolId2, ...] where poolId1 is for tokenA->tokenB, poolId2 is for tokenB->tokenC
+    /// @param amountIn Amount of first token to swap
+    /// @param minAmountOut Minimum amount of final token to receive (slippage protection)
+    /// @param recipient Address to receive the final output token
+    /// @return amountOut Final amount of output token received
+    function swapMultiHop(
+        address[] calldata path,
+        bytes32[] calldata poolIds,
+        uint256 amountIn,
+        uint256 minAmountOut,
+        address recipient
+    ) external payable nonReentrant returns (uint256 amountOut) {
+        require(path.length >= 2, "invalid path");
+        require(poolIds.length == path.length - 1, "invalid poolIds length");
+        require(amountIn > 0, "zero input");
+        require(recipient != address(0), "zero recipient");
+
+        // Validate ETH amount matches msg.value if first token is ETH
+        if (path[0] == ETH) {
+            require(msg.value == amountIn, "ETH amount mismatch");
+        } else {
+            require(msg.value == 0, "unexpected ETH");
+        }
+
+        amountOut = _executeMultiHopSwap(path, poolIds, amountIn, recipient);
+        require(amountOut >= minAmountOut, "slippage");
+
+        // Emit MultiHopSwap event
+        emit MultiHopSwap(msg.sender, path, poolIds, amountIn, amountOut, recipient);
+    }
+
+    /// @notice Internal function to execute multi-hop swap
+    /// @dev Helper function to reduce stack depth
+    function _executeMultiHopSwap(
+        address[] calldata path,
+        bytes32[] calldata poolIds,
+        uint256 amountIn,
+        address recipient
+    ) internal returns (uint256 finalAmount) {
+        uint256 currentAmount = amountIn;
+        address currentToken = path[0];
+
+        // Transfer first token from user
+        _safeTransferFrom(currentToken, msg.sender, address(this), amountIn);
+
+        // Execute each hop sequentially
+        uint256 numHops = poolIds.length;
+        for (uint256 i = 0; i < numHops; i++) {
+            bytes32 poolId = poolIds[i];
+            address nextToken = path[i + 1];
+            bool isLastHop = (i == numHops - 1);
+
+            Pool storage pool = pools[poolId];
+            require(pool.exists, "pool not found");
+
+            // Verify the pool contains currentToken and nextToken
+            require(
+                (pool.token0 == currentToken && pool.token1 == nextToken) ||
+                (pool.token1 == currentToken && pool.token0 == nextToken),
+                "invalid path"
+            );
+
+            // Execute swap for this hop
+            currentAmount = _executeHop(pool, currentToken, currentAmount, isLastHop ? recipient : address(this));
+
+            // Emit Swap event for this hop
+            emit Swap(poolId, msg.sender, currentToken, i == 0 ? amountIn : currentAmount, currentAmount, isLastHop ? recipient : address(this));
+
+            // Update for next iteration
+            currentToken = nextToken;
+        }
+
+        finalAmount = currentAmount;
+    }
+
+    /// @notice Execute a single hop swap
+    /// @dev Helper function to reduce stack depth
+    function _executeHop(
+        Pool storage pool,
+        address tokenIn,
+        uint256 amountIn,
+        address recipient
+    ) internal returns (uint256 amountOut) {
+        (uint112 reserve0, uint112 reserve1) = (pool.reserve0, pool.reserve1);
+        require(reserve0 > 0 && reserve1 > 0, "no reserves");
+
+        bool zeroForOne = (tokenIn == pool.token0);
+        uint256 amountInWithFee = (amountIn * (10000 - pool.feeBps)) / 10000;
+
+        if (zeroForOne) {
+            amountOut = _getAmountOut(amountInWithFee, reserve0, reserve1);
+            pool.reserve0 = uint112(uint256(reserve0) + amountIn);
+            pool.reserve1 = uint112(uint256(reserve1) - amountOut);
+            _safeTransfer(pool.token1, recipient, amountOut);
+        } else {
+            amountOut = _getAmountOut(amountInWithFee, reserve1, reserve0);
+            pool.reserve1 = uint112(uint256(reserve1) + amountIn);
+            pool.reserve0 = uint112(uint256(reserve0) - amountOut);
+            _safeTransfer(pool.token0, recipient, amountOut);
+        }
+    }
+
     function _getAmountOut(
         uint256 amountIn,
         uint112 reserveIn,
