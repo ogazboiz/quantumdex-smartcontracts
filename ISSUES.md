@@ -242,7 +242,7 @@ Extend AMM to support native ETH (WETH) in addition to ERC20 tokens. This would 
 
 ---
 
-## ❌ Pending Issues
+#### Issue 10: Multi-hop Swaps
 **Status:** ✅ COMPLETED  
 **Labels:** `smart-contracts`, `feature`, `enhancement`, `completed`  
 **Priority:** LOW
