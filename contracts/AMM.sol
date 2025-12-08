@@ -293,11 +293,11 @@ contract AMM is ReentrancyGuard, Ownable {
         uint256 amount1Desired
     ) external payable nonReentrant returns (uint256 liquidity, uint256 amount0, uint256 amount1) {
         Pool storage pool = pools[poolId];
-        require(pool.exists, "pool not found");
-        require(amount0Desired > 0 && amount1Desired > 0, "insufficient amounts");
+        if (!pool.exists) revert PoolNotFound();
+        if (amount0Desired == 0 || amount1Desired == 0) revert InsufficientAmounts();
 
         (uint112 reserve0, uint112 reserve1) = (pool.reserve0, pool.reserve1);
-        require(reserve0 > 0 && reserve1 > 0, "no reserves");
+        if (reserve0 == 0 || reserve1 == 0) revert NoReserves();
 
         uint256 amount1Optimal = (amount0Desired * reserve1) / reserve0;
         if (amount1Optimal <= amount1Desired) {
@@ -305,7 +305,7 @@ contract AMM is ReentrancyGuard, Ownable {
             amount1 = amount1Optimal;
         } else {
             uint256 amount0Optimal = (amount1Desired * reserve0) / reserve1;
-            require(amount0Optimal <= amount0Desired, "invalid liquidity ratio");
+            if (amount0Optimal > amount0Desired) revert SlippageExceeded();
             amount0 = amount0Optimal;
             amount1 = amount1Desired;
         }
@@ -314,7 +314,7 @@ contract AMM is ReentrancyGuard, Ownable {
         uint256 expectedEth = 0;
         if (pool.token0 == ETH) expectedEth += amount0;
         if (pool.token1 == ETH) expectedEth += amount1;
-        require(msg.value == expectedEth, "ETH amount mismatch");
+        if (msg.value != expectedEth) revert ETHAmountMismatch();
 
         _safeTransferFrom(pool.token0, msg.sender, address(this), amount0);
         _safeTransferFrom(pool.token1, msg.sender, address(this), amount1);
@@ -324,7 +324,7 @@ contract AMM is ReentrancyGuard, Ownable {
             (amount0 * _totalSupply) / reserve0,
             (amount1 * _totalSupply) / reserve1
         );
-        require(liquidity > 0, "insufficient liquidity minted");
+        if (liquidity == 0) revert ZeroLiquidity();
 
         pool.totalSupply = _totalSupply + liquidity;
         pool.balanceOf[msg.sender] += liquidity;
@@ -346,25 +346,25 @@ contract AMM is ReentrancyGuard, Ownable {
         uint256 liquidity
     ) external nonReentrant returns (uint256 amount0, uint256 amount1) {
         Pool storage pool = pools[poolId];
-        require(pool.exists, "pool not found");
-        require(liquidity > 0, "zero liquidity");
+        if (!pool.exists) revert PoolNotFound();
+        if (liquidity == 0) revert ZeroLiquidity();
 
         uint256 balance = pool.balanceOf[msg.sender];
-        require(balance >= liquidity, "insufficient lp balance");
+        if (balance < liquidity) revert InsufficientLpBalance();
 
         (uint112 reserve0, uint112 reserve1) = (pool.reserve0, pool.reserve1);
         uint256 _totalSupply = pool.totalSupply;
 
         amount0 = (liquidity * reserve0) / _totalSupply;
         amount1 = (liquidity * reserve1) / _totalSupply;
-        require(amount0 > 0 && amount1 > 0, "insufficient amounts");
+        if (amount0 == 0 || amount1 == 0) revert InsufficientAmountsOut();
 
         // Prevent removing liquidity that would leave pool below MINIMUM_LIQUIDITY
         // This ensures the locked liquidity protection remains effective.
         // The check uses >= to allow removal down to exactly MINIMUM_LIQUIDITY,
         // but never below it, preserving the security guarantee.
         uint256 remainingSupply = _totalSupply - liquidity;
-        require(remainingSupply >= MINIMUM_LIQUIDITY, "insufficient liquidity");
+        if (remainingSupply < MINIMUM_LIQUIDITY) revert InsufficientLiquidity();
 
         pool.balanceOf[msg.sender] = balance - liquidity;
         pool.totalSupply = remainingSupply;
@@ -384,11 +384,11 @@ contract AMM is ReentrancyGuard, Ownable {
         uint256 minAmountOut,
         address recipient
     ) external payable nonReentrant returns (uint256 amountOut) {
-        require(amountIn > 0, "zero input");
-        require(recipient != address(0), "zero recipient");
+        if (amountIn == 0) revert ZeroInput();
+        if (recipient == address(0)) revert ZeroRecipient();
 
         Pool storage pool = pools[poolId];
-        require(pool.exists, "pool not found");
+        if (!pool.exists) revert PoolNotFound();
 
         bool zeroForOne;
         if (tokenIn == pool.token0) {
@@ -396,33 +396,33 @@ contract AMM is ReentrancyGuard, Ownable {
         } else if (tokenIn == pool.token1) {
             zeroForOne = false;
         } else {
-            revert("invalid tokenIn");
+            revert InvalidTokenIn();
         }
 
         // Validate ETH amount matches msg.value if tokenIn is ETH
         if (tokenIn == ETH) {
-            require(msg.value == amountIn, "ETH amount mismatch");
+            if (msg.value != amountIn) revert ETHAmountMismatch();
         } else {
-            require(msg.value == 0, "unexpected ETH");
+            if (msg.value != 0) revert UnexpectedETH();
         }
 
         _safeTransferFrom(tokenIn, msg.sender, address(this), amountIn);
 
         (uint112 reserve0, uint112 reserve1) = (pool.reserve0, pool.reserve1);
-        require(reserve0 > 0 && reserve1 > 0, "no reserves");
+        if (reserve0 == 0 || reserve1 == 0) revert NoReserves();
 
         uint256 amountInWithFee = (amountIn * (10000 - pool.feeBps)) / 10000;
 
         if (zeroForOne) {
             amountOut = _getAmountOut(amountInWithFee, reserve0, reserve1);
-            require(amountOut >= minAmountOut, "slippage");
+            if (amountOut < minAmountOut) revert SlippageExceeded();
 
             pool.reserve0 = uint112(uint256(reserve0) + amountIn);
             pool.reserve1 = uint112(uint256(reserve1) - amountOut);
             _safeTransfer(pool.token1, recipient, amountOut);
         } else {
             amountOut = _getAmountOut(amountInWithFee, reserve1, reserve0);
-            require(amountOut >= minAmountOut, "slippage");
+            if (amountOut < minAmountOut) revert SlippageExceeded();
 
             pool.reserve1 = uint112(uint256(reserve1) + amountIn);
             pool.reserve0 = uint112(uint256(reserve0) - amountOut);
